@@ -1,1 +1,32 @@
-#teste
+name: Android CI/CD
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout do código
+      uses: actions/checkout@v4
+
+    - name: Configurar Java (JDK 17)
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: gradle
+
+    - name: Dar permissão de execução ao Gradle
+      run: chmod +x gradlew
+
+    - name: Compilar o APK (Debug)
+      run: ./gradlew assembleDebug
+
+    - name: Disponibilizar o APK para Download
+      uses: actions/upload-artifact@v4
+      with:
+        name: app-debug
+        path: app/build/outputs/apk/debug/app-debug.apk
