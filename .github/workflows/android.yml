@@ -17,12 +17,11 @@ jobs:
       with:
         java-version: '17'
         distribution: 'temurin'
-        cache: gradle
 
-    - name: Compilar o APK (Entrando na pasta MoogSynth)
+    - name: Forçar versão correta do Gradle e Compilar
       run: |
         cd MoogSynth
-        chmod +x gradlew
+        gradle wrapper --gradle-version 8.4
         ./gradlew assembleDebug
 
     - name: Disponibilizar o APK para Download
