@@ -7,20 +7,21 @@ android {
     namespace = "com.moogsynth.app"
     compileSdk = 34
 
-    defaultConfig {
+       defaultConfig {
         applicationId = "com.moogsynth.app"
         minSdk = 26
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
         
-        // Configuração do compilador C++
         externalNativeBuild {
             cmake {
-                cppFlags += "-std=c++17 -O3" // -O3 ativa a otimização máxima de performance
+                cppFlags += "-std=c++17 -O3"
+                arguments += "-DANDROID_STL=c++_shared" // <--- ADICIONE ESTA LINHA
             }
         }
     }
+
 
     buildTypes {
         release {
