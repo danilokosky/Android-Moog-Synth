@@ -23,12 +23,16 @@ class MainActivity : ComponentActivity() {
         audioEngine = NativeAudioEngine()
         audioEngine.startEngine()
 
-        midiHandler = MidiHandler(this, 
+        midiHandler = MidiHandler(
+            context = this,
             onNoteOn = { note, velocity ->
                 audioEngine.noteOn(note, velocity)
             },
             onNoteOff = { note ->
                 audioEngine.noteOff(note)
+            },
+            onAllNotesOff = {
+                audioEngine.allNotesOff()
             }
         )
         midiHandler.setupMidi()
@@ -40,8 +44,7 @@ class MainActivity : ComponentActivity() {
                     .background(Color(0xFF0a0a0c)),
                 contentAlignment = Alignment.Center
             ) {
-                // Atualizaremos a interface a seguir, por enquanto apenas iniciamos
-                SynthScreen(audioEngine) 
+                SynthScreen(audioEngine)
             }
         }
     }
