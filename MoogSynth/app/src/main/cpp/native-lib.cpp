@@ -2,6 +2,7 @@
 #include <oboe/Oboe.h>
 #include <cmath>
 #include <array>
+#include <vector>
 #include <atomic>
 #include <algorithm>
 #include <mutex>
@@ -38,19 +39,19 @@ public:
 
         float sample = 0.0f;
         switch (waveType) {
-            case 0: // Sawtooth
+            case 0:
                 sample = (2.0f * phase) - 1.0f;
                 sample -= polyBlep(phase, dt);
                 break;
-            case 1: // Square
+            case 1:
                 sample = (phase < 0.5f) ? 1.0f : -1.0f;
                 sample += polyBlep(phase, dt);
                 sample -= polyBlep(fmodf(phase + 0.5f, 1.0f), dt);
                 break;
-            case 2: // Triangle
+            case 2:
                 sample = 2.0f * fabsf(2.0f * phase - 1.0f) - 1.0f;
                 break;
-            case 3: // Sine
+            case 3:
             default:
                 sample = sinf(2.0f * static_cast<float>(M_PI) * phase);
                 break;
@@ -81,27 +82,15 @@ public:
         releaseTime = std::max(0.005f, r);
     }
 
-    void triggerOn() {
-        state = ATTACK;
-    }
-
-    void triggerOff() {
-        if (state != IDLE) {
-            state = RELEASE;
-        }
-    }
-
-    void kill() {
-        state = IDLE;
-        currentLevel = 0.0f;
-    }
+    void triggerOn() { state = ATTACK; }
+    void triggerOff() { if (state != IDLE) state = RELEASE; }
+    void kill() { state = IDLE; currentLevel = 0.0f; }
 
     bool isIdle() const { return state == IDLE; }
     bool isReleasing() const { return state == RELEASE; }
 
     float nextLevel() {
         float dt = 1.0f / sampleRate;
-
         switch (state) {
             case IDLE:
                 currentLevel = 0.0f;
@@ -185,6 +174,50 @@ public:
     }
 };
 
+// --- DELAY ANALÓGICO (TAPE ECHO) ---
+class AnalogDelay {
+private:
+    std::vector<float> buffer;
+    int writeIdx = 0;
+    float sampleRate = 48000.0f;
+    float lpState = 0.0f;
+
+public:
+    void init(float sr) {
+        sampleRate = sr;
+        buffer.assign(static_cast<size_t>(sr * 1.5f), 0.0f); // Até 1.5s de Delay
+        writeIdx = 0;
+        lpState = 0.0f;
+    }
+
+    void clear() {
+        std::fill(buffer.begin(), buffer.end(), 0.0f);
+        lpState = 0.0f;
+    }
+
+    float process(float input, float delayTimeSec, float feedback, float mix) {
+        if (mix <= 0.001f || buffer.empty()) return input;
+
+        int delaySamples = std::clamp(
+            static_cast<int>(delayTimeSec * sampleRate),
+            1,
+            static_cast<int>(buffer.size()) - 1
+        );
+
+        int readIdx = writeIdx - delaySamples;
+        if (readIdx < 0) readIdx += static_cast<int>(buffer.size());
+
+        float delayed = buffer[readIdx];
+        // Filtro passa-baixas analógico nas repetições para simular fita magnética
+        lpState += 0.25f * (delayed - lpState);
+
+        buffer[writeIdx] = tanhf(input + lpState * std::clamp(feedback, 0.0f, 0.92f));
+        writeIdx = (writeIdx + 1) % static_cast<int>(buffer.size());
+
+        return input * (1.0f - mix * 0.5f) + lpState * mix;
+    }
+};
+
 // --- VOZ POLIFÔNICA ---
 class Voice {
 private:
@@ -198,9 +231,9 @@ private:
 public:
     void init(float sr) {
         for (int i = 0; i < 3; ++i) osc[i].init(sr);
-        osc[0].setWaveType(0); // Saw
-        osc[1].setWaveType(1); // Square
-        osc[2].setWaveType(2); // Triangle
+        osc[0].setWaveType(0);
+        osc[1].setWaveType(1);
+        osc[2].setWaveType(2);
 
         ampEnv.init(sr);
         ampEnv.setADSR(0.01f, 0.3f, 0.7f, 0.3f);
@@ -261,7 +294,7 @@ public:
     int getNote() const { return currentNote; }
     uint64_t getAge() const { return age; }
 
-    float renderSample(const float* oscVols, float baseCutoff, float resonance, float filterEnvAmt) {
+    float renderSample(const float* oscVols, float baseCutoff, float resonance, float filterEnvAmt, float lfoModHz) {
         if (ampEnv.isIdle()) return 0.0f;
 
         float rawMix = (osc[0].nextSample() * oscVols[0]) +
@@ -269,7 +302,7 @@ public:
                        (osc[2].nextSample() * oscVols[2]);
 
         float fEnvVal = filterEnv.nextLevel();
-        float modulatedCutoff = baseCutoff + (fEnvVal * filterEnvAmt);
+        float modulatedCutoff = baseCutoff + (fEnvVal * filterEnvAmt) + lfoModHz;
 
         float filteredSignal = vcf.process(rawMix, modulatedCutoff, resonance);
         return filteredSignal * ampEnv.nextLevel();
@@ -282,20 +315,38 @@ private:
     std::shared_ptr<oboe::AudioStream> stream;
     static const int MAX_VOICES = 16;
     std::array<Voice, MAX_VOICES> voices;
+    Oscillator lfo;
+    AnalogDelay tapeDelay;
     std::mutex voiceMutex;
     uint64_t voiceCounter = 0;
 
     float oscVolumes[3] = {0.75f, 0.55f, 0.45f};
-    float oscTunes[3] = {0.0f, -12.0f, 7.0f}; // Semitons (0, -1 oitava, +5ª justa)
+    float oscTunes[3] = {0.0f, -12.0f, 7.0f};
 
     std::atomic<float> masterVolume{0.85f};
     std::atomic<float> filterCutoff{1800.0f};
     std::atomic<float> filterResonance{0.35f};
     std::atomic<float> filterEnvAmount{2500.0f};
 
+    // LFO & Delay Analógico
+    std::atomic<float> lfoRate{2.5f};      // Hz (0.1 a 20 Hz)
+    std::atomic<float> lfoDepth{0.0f};     // Modulação do Cutoff em Hz (0 a 3000 Hz)
+    std::atomic<float> delayTime{0.32f};   // Segundos
+    std::atomic<float> delayFeedback{0.4f};
+    std::atomic<float> delayMix{0.2f};
+
+    // Buffer do Osciloscópio
+    static const int SCOPE_SIZE = 256;
+    std::array<float, SCOPE_SIZE> scopeBuffer{};
+    std::atomic<int> scopeWriteIndex{0};
+
 public:
     AudioEngine() {
         for (auto& v : voices) v.init(48000.0f);
+        lfo.init(48000.0f);
+        lfo.setWaveType(2); // Onda Triangular para LFO suave
+        tapeDelay.init(48000.0f);
+        scopeBuffer.fill(0.0f);
     }
 
     bool start() {
@@ -313,6 +364,8 @@ public:
         if (result == oboe::Result::OK) {
             float actualSampleRate = static_cast<float>(stream->getSampleRate());
             for (auto& v : voices) v.init(actualSampleRate);
+            lfo.init(actualSampleRate);
+            tapeDelay.init(actualSampleRate);
             stream->requestStart();
             return true;
         }
@@ -340,17 +393,11 @@ public:
         Voice* targetVoice = nullptr;
 
         for (auto& v : voices) {
-            if (v.isActive() && v.getNote() == note) {
-                targetVoice = &v;
-                break;
-            }
+            if (v.isActive() && v.getNote() == note) { targetVoice = &v; break; }
         }
         if (!targetVoice) {
             for (auto& v : voices) {
-                if (!v.isActive()) {
-                    targetVoice = &v;
-                    break;
-                }
+                if (!v.isActive()) { targetVoice = &v; break; }
             }
         }
         if (!targetVoice) {
@@ -378,15 +425,14 @@ public:
     void noteOff(int note) {
         std::lock_guard<std::mutex> lock(voiceMutex);
         for (auto& v : voices) {
-            if (v.isActive() && v.getNote() == note) {
-                v.noteOff(note);
-            }
+            if (v.isActive() && v.getNote() == note) v.noteOff(note);
         }
     }
 
     void allNotesOff() {
         std::lock_guard<std::mutex> lock(voiceMutex);
         for (auto& v : voices) v.kill();
+        tapeDelay.clear();
     }
 
     void setOscVolume(int index, float vol) {
@@ -414,6 +460,14 @@ public:
     void setFilterResonance(float res) { filterResonance = res; }
     void setFilterEnvAmount(float amtHz) { filterEnvAmount = amtHz; }
 
+    void setLfoRate(float rateHz) { lfoRate = rateHz; }
+    void setLfoDepth(float depthHz) { lfoDepth = depthHz; }
+    void setDelayParams(float timeSec, float fb, float mix) {
+        delayTime = timeSec;
+        delayFeedback = fb;
+        delayMix = mix;
+    }
+
     void setAmpADSR(float a, float d, float s, float r) {
         std::lock_guard<std::mutex> lock(voiceMutex);
         for (auto& v : voices) v.setAmpADSR(a, d, s, r);
@@ -424,6 +478,14 @@ public:
         for (auto& v : voices) v.setFilterADSR(a, d, s, r);
     }
 
+    void copyScopeData(float* dest, int length) {
+        int count = std::min(length, SCOPE_SIZE);
+        int readIdx = scopeWriteIndex.load();
+        for (int i = 0; i < count; ++i) {
+            dest[i] = scopeBuffer[(readIdx + i) % SCOPE_SIZE];
+        }
+    }
+
     oboe::DataCallbackResult onAudioReady(oboe::AudioStream *oboeStream, void *audioData, int32_t numFrames) override {
         float *outputBuffer = static_cast<float*>(audioData);
 
@@ -431,6 +493,11 @@ public:
         float res = filterResonance.load();
         float envAmt = filterEnvAmount.load();
         float masterVol = masterVolume.load();
+        float currentLfoRate = lfoRate.load();
+        float currentLfoDepth = lfoDepth.load();
+        float dTime = delayTime.load();
+        float dFb = delayFeedback.load();
+        float dMix = delayMix.load();
 
         std::unique_lock<std::mutex> lock(voiceMutex, std::try_to_lock);
         if (!lock.owns_lock()) {
@@ -438,13 +505,27 @@ public:
             return oboe::DataCallbackResult::Continue;
         }
 
+        lfo.setFrequency(currentLfoRate);
+        int wIdx = scopeWriteIndex.load();
+
         for (int i = 0; i < numFrames; ++i) {
+            float lfoMod = lfo.nextSample() * currentLfoDepth;
             float sampleSum = 0.0f;
+
             for (auto& v : voices) {
-                sampleSum += v.renderSample(oscVolumes, cutoff, res, envAmt);
+                sampleSum += v.renderSample(oscVolumes, cutoff, res, envAmt, lfoMod);
             }
-            outputBuffer[i] = tanhf(sampleSum * masterVol * 0.6f);
+
+            float withDelay = tapeDelay.process(sampleSum * 0.6f, dTime, dFb, dMix);
+            float out = tanhf(withDelay * masterVol);
+            outputBuffer[i] = out;
+
+            if ((i & 3) == 0) {
+                scopeBuffer[wIdx] = out;
+                wIdx = (wIdx + 1) % SCOPE_SIZE;
+            }
         }
+        scopeWriteIndex.store(wIdx);
 
         return oboe::DataCallbackResult::Continue;
     }
@@ -523,6 +604,21 @@ Java_com_moogsynth_app_audio_NativeAudioEngine_setFilterEnvAmount(JNIEnv *env, j
 }
 
 JNIEXPORT void JNICALL
+Java_com_moogsynth_app_audio_NativeAudioEngine_setLfoRate(JNIEnv *env, jobject thiz, jfloat rateHz) {
+    if (engine) engine->setLfoRate(rateHz);
+}
+
+JNIEXPORT void JNICALL
+Java_com_moogsynth_app_audio_NativeAudioEngine_setLfoDepth(JNIEnv *env, jobject thiz, jfloat depthHz) {
+    if (engine) engine->setLfoDepth(depthHz);
+}
+
+JNIEXPORT void JNICALL
+Java_com_moogsynth_app_audio_NativeAudioEngine_setDelayParams(JNIEnv *env, jobject thiz, jfloat timeSec, jfloat feedback, jfloat mix) {
+    if (engine) engine->setDelayParams(timeSec, feedback, mix);
+}
+
+JNIEXPORT void JNICALL
 Java_com_moogsynth_app_audio_NativeAudioEngine_setAmpADSR(JNIEnv *env, jobject thiz, jfloat a, jfloat d, jfloat s, jfloat r) {
     if (engine) engine->setAmpADSR(a, d, s, r);
 }
@@ -530,6 +626,15 @@ Java_com_moogsynth_app_audio_NativeAudioEngine_setAmpADSR(JNIEnv *env, jobject t
 JNIEXPORT void JNICALL
 Java_com_moogsynth_app_audio_NativeAudioEngine_setFilterADSR(JNIEnv *env, jobject thiz, jfloat a, jfloat d, jfloat s, jfloat r) {
     if (engine) engine->setFilterADSR(a, d, s, r);
+}
+
+JNIEXPORT void JNICALL
+Java_com_moogsynth_app_audio_NativeAudioEngine_getWaveform(JNIEnv *env, jobject thiz, jfloatArray outArray) {
+    if (!engine) return;
+    jsize len = env->GetArrayLength(outArray);
+    jfloat* body = env->GetFloatArrayElements(outArray, nullptr);
+    engine->copyScopeData(body, len);
+    env->ReleaseFloatArrayElements(outArray, body, 0);
 }
 
 }
