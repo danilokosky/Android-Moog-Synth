@@ -12,10 +12,12 @@ class MidiHandler(
     context: Context,
     private val onNoteOn: (note: Int, velocity: Int) -> Unit,
     private val onNoteOff: (note: Int) -> Unit,
+    private val onControlChange: (cc: Int, value: Int) -> Unit = { _, _ -> },
     private val onAllNotesOff: () -> Unit = {}
 ) {
     private val midiManager = context.getSystemService(Context.MIDI_SERVICE) as MidiManager
     private val openedDevices = mutableMapOf<MidiDeviceInfo, MidiDevice>()
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     fun setupMidi() {
         midiManager.registerDeviceCallback(object : MidiManager.DeviceCallback() {
@@ -25,9 +27,9 @@ class MidiHandler(
 
             override fun onDeviceRemoved(deviceInfo: MidiDeviceInfo) {
                 openedDevices.remove(deviceInfo)?.close()
-                onAllNotesOff() // Evita notas presas se o cabo MIDI for desconectado
+                onAllNotesOff()
             }
-        }, Handler(Looper.getMainLooper()))
+        }, mainHandler)
 
         for (deviceInfo in midiManager.devices) {
             openMidiDevice(deviceInfo)
@@ -44,10 +46,9 @@ class MidiHandler(
                     outputPort?.connect(MidiStreamParser())
                 }
             }
-        }, Handler(Looper.getMainLooper()))
+        }, mainHandler)
     }
 
-    // Parser de fluxo MIDI completo: suporta múltiplos eventos por pacote USB e Running Status
     private inner class MidiStreamParser : MidiReceiver() {
         private var runningStatus = 0
 
@@ -58,8 +59,6 @@ class MidiHandler(
             while (i < end) {
                 val byte = msg[i].toInt() and 0xFF
 
-                // Mensagens de Sistema em Tempo Real (Clock, Active Sensing, etc. >= 0xF8)
-                // Ignoramos sem alterar o Running Status
                 if (byte >= 0xF8) {
                     i++
                     continue
@@ -67,19 +66,13 @@ class MidiHandler(
 
                 val status: Int
                 if (byte and 0x80 != 0) {
-                    // É um byte de Status novo
                     status = byte
-                    if (byte < 0xF0) {
-                        runningStatus = status
-                    } else {
-                        runningStatus = 0 // Mensagens System Common limpam o Running Status
-                    }
+                    runningStatus = if (byte < 0xF0) status else 0
                     i++
                 } else {
-                    // Running Status: o byte atual já é o primeiro byte de dados!
                     status = runningStatus
                     if (status == 0) {
-                        i++ // Byte órfão, avança
+                        i++
                         continue
                     }
                 }
@@ -87,7 +80,7 @@ class MidiHandler(
                 val command = status and 0xF0
 
                 when (command) {
-                    0x90 -> { // Note On
+                    0x90 -> {
                         if (i + 1 < end) {
                             val note = msg[i].toInt() and 0x7F
                             val vel = msg[i + 1].toInt() and 0x7F
@@ -95,33 +88,28 @@ class MidiHandler(
                             i += 2
                         } else break
                     }
-                    0x80 -> { // Note Off
+                    0x80 -> {
                         if (i + 1 < end) {
                             val note = msg[i].toInt() and 0x7F
                             onNoteOff(note)
                             i += 2
                         } else break
                     }
-                    0xB0 -> { // Control Change (CC)
+                    0xB0 -> { // Control Change (Knobs e Faders físicos)
                         if (i + 1 < end) {
                             val cc = msg[i].toInt() and 0x7F
-                            // CC 120 (All Sound Off) ou CC 123 (All Notes Off)
+                            val value = msg[i + 1].toInt() and 0x7F
                             if (cc == 120 || cc == 123) {
                                 onAllNotesOff()
+                            } else {
+                                mainHandler.post { onControlChange(cc, value) }
                             }
                             i += 2
                         } else break
                     }
-                    0xA0, 0xE0 -> { // Poly Aftertouch, Pitch Bend (2 bytes de dados)
-                        i += 2
-                    }
-                    0xC0, 0xD0 -> { // Program Change, Channel Aftertouch (1 byte de dado)
-                        i += 1
-                    }
-                    else -> {
-                        // Outras mensagens (ex: SysEx 0xF0), avança
-                        i++
-                    }
+                    0xA0, 0xE0 -> i += 2
+                    0xC0, 0xD0 -> i += 1
+                    else -> i++
                 }
             }
         }
