@@ -211,8 +211,22 @@ public:
         vcf.init(sr);
     }
 
+//    void noteOn(int note, float freq, uint64_t noteAge) {
+//        if (!ampEnv.isActive()) {
+//            vcf.reset();
+//        }
+//        currentNote = note;
+//        age = noteAge;
+//        osc1.setFrequency(freq);
+//        osc2.setFrequency(freq * 0.5f);
+//        osc3.setFrequency(freq * 1.4983f);
+//        ampEnv.triggerOn();
+//        filterEnv.triggerOn();
+//    }
+
+
     void noteOn(int note, float freq, uint64_t noteAge) {
-        if (!ampEnv.isActive()) {
+        if (ampEnv.isIdle()) {
             vcf.reset();
         }
         currentNote = note;
@@ -223,6 +237,20 @@ public:
         ampEnv.triggerOn();
         filterEnv.triggerOn();
     }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     void noteOff(int note) {
         if (currentNote == note) {
