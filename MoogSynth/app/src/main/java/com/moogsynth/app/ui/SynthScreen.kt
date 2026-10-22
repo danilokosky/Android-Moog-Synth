@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
@@ -66,7 +67,7 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
     var aRelease by remember { mutableStateOf(0.3f) }
     var masterNorm by remember { mutableStateOf(0.85f) }
 
-    // Sistema MIDI Learn: ParamID -> CC Number
+    // Sistema MIDI Learn Contínuo
     var isMidiLearnMode by remember { mutableStateOf(false) }
     var selectedParamForLearn by remember { mutableStateOf<String?>(null) }
     val paramToCCMap = remember { mutableStateMapOf<String, Int>() }
@@ -79,7 +80,6 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
 
     fun normToSemitones(norm: Float): Float = ((norm * 48f) - 24f).roundToInt().toFloat()
 
-    // Atualiza qualquer parâmetro tanto via Toque na Tela quanto via Controlador MIDI Físico
     fun updateParamById(paramId: String, normVal: Float) {
         val v = normVal.coerceIn(0f, 1f)
         when (paramId) {
@@ -109,24 +109,22 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
         }
     }
 
-    // Recebe mensagens CC em tempo real da controladora USB
+    // Escuta comandos MIDI CC
     LaunchedEffect(incomingMidiCC) {
         incomingMidiCC?.let { event ->
             val norm = (event.value / 127f).coerceIn(0f, 1f)
             if (isMidiLearnMode && selectedParamForLearn != null) {
                 val targetParam = selectedParamForLearn!!
-                // Remove este CC de qualquer outro parâmetro anterior para evitar duplicidade
+                // Remove CC duplicado se já estivesse em outro knob
                 val previousKeys = paramToCCMap.filterValues { it == event.cc }.keys.toList()
                 previousKeys.forEach { paramToCCMap.remove(it) }
 
-                // Vincula o CC ao parâmetro selecionado e já atualiza a posição do Knob!
                 paramToCCMap[targetParam] = event.cc
                 updateParamById(targetParam, norm)
-
-                isMidiLearnMode = false
+                
+                // Mantém o modo MIDI Learn ativo para você poder mapear o próximo knob em sequência!
                 selectedParamForLearn = null
             } else {
-                // Move graficamente e sonoramente todos os parâmetros mapeados a este CC
                 paramToCCMap.forEach { (paramId, mappedCC) ->
                     if (mappedCC == event.cc) {
                         updateParamById(paramId, norm)
@@ -136,7 +134,6 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
         }
     }
 
-    // Wrapper inteligente para criar Knobs integrados ao MIDI Learn + Balãozinho CC + Auréola Dourada
     @Composable
     fun SmartKnob(paramId: String, label: String, valueText: String, value: Float) {
         KnobControl(
@@ -144,7 +141,8 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
             valueText = valueText,
             value = value,
             isLearningSelected = (isMidiLearnMode && selectedParamForLearn == paramId),
-            mappedCC = paramToCCMap[paramId],
+            mappedCC = if (isMidiLearnMode) paramToCCMap[paramId] else null, // Balãozinho só aparece no modo Learn
+            onUnmap = { paramToCCMap.remove(paramId) },
             onKnobClick = {
                 if (isMidiLearnMode) {
                     selectedParamForLearn = paramId
@@ -160,7 +158,7 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
         )
     }
 
-    // Osciloscópio em Tempo Real (60 FPS)
+    // Osciloscópio (60 FPS)
     val waveformBuffer = remember { FloatArray(256) }
     var frameTrigger by remember { mutableStateOf(0) }
 
@@ -195,8 +193,8 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
                 )
                 Text(
                     text = if (isMidiLearnMode) {
-                        if (selectedParamForLearn == null) "MODO MIDI LEARN: Toque em qualquer Knob para iluminar sua auréola dourada..."
-                        else "AGUARDANDO HARDWARE: Gire o Knob/Fader físico para vincular a [$selectedParamForLearn]!"
+                        if (selectedParamForLearn == null) "MIDI LEARN ATIVO: Clique num botão da tela para selecioná-lo..."
+                        else "AGUARDANDO CONTROLLER: Gire um Knob físico para mapear [$selectedParamForLearn]!"
                     } else "C++ OBOE | 3x POLYBLEP VCO | 24dB LADDER | LFO & TAPE DELAY",
                     color = if (isMidiLearnMode) Color(0xFFFBBF24) else Color.Gray,
                     fontSize = 11.sp,
@@ -347,6 +345,7 @@ fun KnobControl(
     value: Float,
     isLearningSelected: Boolean = false,
     mappedCC: Int? = null,
+    onUnmap: () -> Unit = {},
     onKnobClick: () -> Unit = {},
     onValueChange: (Float) -> Unit
 ) {
@@ -359,14 +358,16 @@ fun KnobControl(
                 onKnobClick = onKnobClick
             )
 
-            // Balãozinho (Badge) mostrando qual CC está mapeado neste botão
+            // Balãozinho de CC com botão [×] de desmapear (visível apenas no modo MIDI Learn)
             if (mappedCC != null) {
-                Box(
+                Row(
                     modifier = Modifier
-                        .offset(x = 4.dp, y = (-4).dp)
+                        .offset(x = 6.dp, y = (-4).dp)
                         .background(Color(0xFF0284C7), RoundedCornerShape(10.dp))
                         .border(1.dp, Color(0xFF7DD3FC), RoundedCornerShape(10.dp))
-                        .padding(horizontal = 5.dp, vertical = 1.dp)
+                        .padding(horizontal = 5.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(3.dp)
                 ) {
                     Text(
                         text = "CC $mappedCC",
@@ -374,6 +375,16 @@ fun KnobControl(
                         fontSize = 8.sp,
                         fontWeight = FontWeight.ExtraBold
                     )
+                    // Botão X para desmapear
+                    Box(
+                        modifier = Modifier
+                            .size(12.dp)
+                            .background(Color(0xFF0369A1), CircleShape)
+                            .clickable { onUnmap() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("×", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                    }
                 }
             }
         }
