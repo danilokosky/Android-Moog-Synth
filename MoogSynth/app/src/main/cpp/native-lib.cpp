@@ -4,14 +4,16 @@
 #include <array>
 #include <atomic>
 #include <algorithm>
+#include <mutex>
+#include <thread>
 
 // --- OSCILADOR COM POLYBLEP (ANTI-ALIASING) ---
 class Oscillator {
 private:
-    float sampleRate = 44100.0f;
+    float sampleRate = 48000.0f;
     float frequency = 440.0f;
     float phase = 0.0f;
-    int waveType = 0; // 0: Saw, 1: Square, 2: Triangle, 3: Sine
+    int waveType = 0;
 
     float polyBlep(float t, float dt) {
         if (t < dt) {
@@ -60,15 +62,14 @@ public:
 // --- ENVELOPE ADSR ---
 class Envelope {
 private:
-    float sampleRate = 44100.0f;
+    float sampleRate = 48000.0f;
     enum State { IDLE, ATTACK, DECAY, SUSTAIN, RELEASE } state = IDLE;
     float currentLevel = 0.0f;
-    float timeInState = 0.0f;
 
-    float attackTime = 0.01f;
+    float attackTime = 0.008f;
     float decayTime = 0.2f;
     float sustainLevel = 0.7f;
-    float releaseTime = 0.3f;
+    float releaseTime = 0.25f;
 
 public:
     void init(float sr) { sampleRate = sr; }
@@ -82,37 +83,40 @@ public:
 
     void triggerOn() {
         state = ATTACK;
-        timeInState = 0.0f;
+        // Não zeramos currentLevel se a voz estiver sendo re-disparada (evita cliques!)
     }
 
     void triggerOff() {
         if (state != IDLE) {
             state = RELEASE;
-            timeInState = 0.0f;
         }
     }
 
+    void kill() {
+        state = IDLE;
+        currentLevel = 0.0f;
+    }
+
     bool isIdle() const { return state == IDLE; }
+    bool isReleasing() const { return state == RELEASE; }
 
     float nextLevel() {
         float dt = 1.0f / sampleRate;
-        timeInState += dt;
 
         switch (state) {
             case IDLE:
                 currentLevel = 0.0f;
                 break;
             case ATTACK:
-                currentLevel = timeInState / attackTime;
+                currentLevel += dt / attackTime;
                 if (currentLevel >= 1.0f) {
                     currentLevel = 1.0f;
                     state = DECAY;
-                    timeInState = 0.0f;
                 }
                 break;
             case DECAY:
-                currentLevel = 1.0f - (1.0f - sustainLevel) * (timeInState / decayTime);
-                if (timeInState >= decayTime) {
+                currentLevel -= (1.0f - sustainLevel) * (dt / decayTime);
+                if (currentLevel <= sustainLevel) {
                     currentLevel = sustainLevel;
                     state = SUSTAIN;
                 }
@@ -121,8 +125,8 @@ public:
                 currentLevel = sustainLevel;
                 break;
             case RELEASE:
-                currentLevel *= (1.0f - (dt / releaseTime));
-                if (currentLevel <= 0.001f) {
+                currentLevel -= currentLevel * (dt / releaseTime) * 3.0f;
+                if (currentLevel <= 0.0005f) {
                     currentLevel = 0.0f;
                     state = IDLE;
                 }
@@ -132,10 +136,10 @@ public:
     }
 };
 
-// --- FILTRO MOOG LADDER 24dB/OCT (4 POLOS COM SATURAÇÃO NÃO-LINEAR) ---
+// --- FILTRO MOOG LADDER 24dB/OCT ---
 class MoogLadderFilter {
 private:
-    float sampleRate = 44100.0f;
+    float sampleRate = 48000.0f;
     float stage[4] = {0.0f, 0.0f, 0.0f, 0.0f};
     float delay[4] = {0.0f, 0.0f, 0.0f, 0.0f};
 
@@ -153,30 +157,24 @@ public:
     }
 
     float process(float input, float cutoffHz, float resonance) {
-        // Limita o Cutoff por segurança até próximo de Nyquist
         float fc = std::clamp(cutoffHz, 20.0f, sampleRate * 0.42f);
         float f = (2.0f * fc) / sampleRate;
 
-        // Curva de sintonia empírica para resposta de frequência precisa em 4 polos
         float p = f * (1.8f - 0.8f * f);
         float k = 2.0f * sinf(f * static_cast<float>(M_PI) * 0.5f) - 1.0f;
 
-        // Compensação de realimentação (Resonance de 0.0 a 1.0 mapeado para auto-oscilação até ~4.0)
         float t1 = (1.0f - p) * 1.386249f;
         float t2 = 12.0f + t1 * t1;
         float resScaled = std::clamp(resonance, 0.0f, 0.98f) * 4.0f;
         float r = resScaled * (t2 + 6.0f * t1) / (t2 - 6.0f * t1);
 
-        // Realimentação negativa do 4º polo com saturação térmica (tanhf)
         float x = input - r * stage[3];
 
-        // 4 estágios em cascata de 6dB/oct = 24dB/oct (4 polos)
         stage[0] = x * p + delay[0] * p - k * stage[0];
         stage[1] = stage[0] * p + delay[1] * p - k * stage[1];
         stage[2] = stage[1] * p + delay[2] * p - k * stage[2];
         stage[3] = stage[2] * p + delay[3] * p - k * stage[3];
 
-        // Saturação não-linear do transistor no último estágio para evitar explosão do filtro
         stage[3] = tanhf(stage[3]);
 
         delay[0] = x;
@@ -188,7 +186,7 @@ public:
     }
 };
 
-// --- VOZ POLIFÔNICA COMPLETA (3 OSC + MOOG VCF + 2 ENVELOPES) ---
+// --- VOZ POLIFÔNICA ---
 class Voice {
 private:
     Oscillator osc1, osc2, osc3;
@@ -196,27 +194,32 @@ private:
     Envelope filterEnv;
     MoogLadderFilter vcf;
     int currentNote = -1;
+    uint64_t age = 0; // Usado para saber qual é a voz mais antiga no roubo de vozes
 
 public:
     void init(float sr) {
-        osc1.init(sr); osc1.setWaveType(0); // Sawtooth
-        osc2.init(sr); osc2.setWaveType(1); // Square
-        osc3.init(sr); osc3.setWaveType(2); // Triangle
+        osc1.init(sr); osc1.setWaveType(0);
+        osc2.init(sr); osc2.setWaveType(1);
+        osc3.init(sr); osc3.setWaveType(2);
 
         ampEnv.init(sr);
-        ampEnv.setADSR(0.005f, 0.3f, 0.7f, 0.3f);
+        ampEnv.setADSR(0.005f, 0.25f, 0.7f, 0.25f);
 
         filterEnv.init(sr);
-        filterEnv.setADSR(0.01f, 0.25f, 0.3f, 0.4f); // Envelope clássico percussivo de filtro Moog
+        filterEnv.setADSR(0.008f, 0.25f, 0.3f, 0.3f);
 
         vcf.init(sr);
     }
 
-    void noteOn(int note, float freq) {
+    void noteOn(int note, float freq, uint64_t noteAge) {
+        if (!ampEnv.isActive()) {
+            vcf.reset();
+        }
         currentNote = note;
+        age = noteAge;
         osc1.setFrequency(freq);
-        osc2.setFrequency(freq * 0.5f); // Sub-oitava (-12 semitons)
-        osc3.setFrequency(freq * 1.4983f); // Quinta justa (+7 semitons)
+        osc2.setFrequency(freq * 0.5f);
+        osc3.setFrequency(freq * 1.4983f);
         ampEnv.triggerOn();
         filterEnv.triggerOn();
     }
@@ -228,62 +231,71 @@ public:
         }
     }
 
+    void kill() {
+        currentNote = -1;
+        ampEnv.kill();
+        filterEnv.kill();
+        vcf.reset();
+    }
+
     void setFilterADSR(float a, float d, float s, float r) {
         filterEnv.setADSR(a, d, s, r);
     }
 
     bool isActive() const { return !ampEnv.isIdle(); }
+    bool isReleasing() const { return ampEnv.isReleasing(); }
     int getNote() const { return currentNote; }
+    uint64_t getAge() const { return age; }
 
     float renderSample(float baseCutoff, float resonance, float filterEnvAmt) {
         if (ampEnv.isIdle()) return 0.0f;
 
-        // Soma os 3 osciladores
         float rawMix = (osc1.nextSample() * 0.55f) +
                        (osc2.nextSample() * 0.35f) +
                        (osc3.nextSample() * 0.30f);
 
-        // Modula a frequência de corte pelo envelope dedicado do filtro
         float fEnvVal = filterEnv.nextLevel();
         float modulatedCutoff = baseCutoff + (fEnvVal * filterEnvAmt);
 
-        // Passa pelo Filtro Moog Ladder de 24dB/oct
         float filteredSignal = vcf.process(rawMix, modulatedCutoff, resonance);
-
-        // Aplica o VCA (Envelope de Amplitude)
         return filteredSignal * ampEnv.nextLevel();
     }
 };
 
-// --- MOTOR DE ÁUDIO OBOE (ULTRA-BAIXA LATÊNCIA) ---
-class AudioEngine : public oboe::AudioStreamDataCallback {
+// --- MOTOR DE ÁUDIO OBOE COM HOT-SWAP DE DISPOSITIVOS DE ÁUDIO ---
+class AudioEngine : public oboe::AudioStreamDataCallback, public oboe::AudioStreamErrorCallback {
 private:
     std::shared_ptr<oboe::AudioStream> stream;
-    static const int MAX_VOICES = 8;
+    static const int MAX_VOICES = 16; // Polifonia ampliada para 16 vozes para glissandos
     std::array<Voice, MAX_VOICES> voices;
+    std::mutex voiceMutex;
+    uint64_t voiceCounter = 0;
 
     std::atomic<float> masterVolume{0.85f};
-    std::atomic<float> filterCutoff{1800.0f};   // Cutoff inicial em Hz
-    std::atomic<float> filterResonance{0.35f};  // Ressonância inicial (0.0 a 1.0)
-    std::atomic<float> filterEnvAmount{2500.0f}; // Intensidade do Envelope em Hz
+    std::atomic<float> filterCutoff{1800.0f};
+    std::atomic<float> filterResonance{0.35f};
+    std::atomic<float> filterEnvAmount{2500.0f};
 
 public:
     AudioEngine() {
-        for (auto& v : voices) v.init(44100.0f);
+        for (auto& v : voices) v.init(48000.0f);
     }
 
     bool start() {
+        std::lock_guard<std::mutex> lock(voiceMutex);
         oboe::AudioStreamBuilder builder;
         builder.setDirection(oboe::Direction::Output)
                ->setPerformanceMode(oboe::PerformanceMode::LowLatency)
                ->setSharingMode(oboe::SharingMode::Exclusive)
                ->setFormat(oboe::AudioFormat::Float)
                ->setChannelCount(oboe::ChannelCount::Mono)
-               ->setSampleRate(44100)
-               ->setDataCallback(this);
+               ->setDataCallback(this)
+               ->setErrorCallback(this); // Monitora desconexão de fone USB/Bluetooth!
 
         oboe::Result result = builder.openStream(stream);
         if (result == oboe::Result::OK) {
+            float actualSampleRate = static_cast<float>(stream->getSampleRate());
+            for (auto& v : voices) v.init(actualSampleRate);
             stream->requestStart();
             return true;
         }
@@ -298,20 +310,78 @@ public:
         }
     }
 
-    void noteOn(int note, int velocity) {
-        Voice* targetVoice = nullptr;
-        for (auto& v : voices) {
-            if (!v.isActive()) { targetVoice = &v; break; }
+    // CHAMADO AUTOMATICAMENTE QUANDO O FONE USB É DESCONECTADO!
+    void onErrorAfterClose(oboe::AudioStream *oboeStream, oboe::Result error) override {
+        if (error == oboe::Result::ErrorDisconnected) {
+            // Reinicia o motor na nova saída de áudio padrão do Android em uma thread separada
+            std::thread([this]() {
+                this->start();
+            }).detach();
         }
-        if (!targetVoice) targetVoice = &voices[0];
+    }
+
+    void noteOn(int note, int velocity) {
+        std::lock_guard<std::mutex> lock(voiceMutex);
+        Voice* targetVoice = nullptr;
+
+        // 1. Se a mesma nota já está tocando, reutiliza a mesma voz (evita empilhar a mesma nota!)
+        for (auto& v : voices) {
+            if (v.isActive() && v.getNote() == note) {
+                targetVoice = &v;
+                break;
+            }
+        }
+
+        // 2. Se não, busca uma voz totalmente livre
+        if (!targetVoice) {
+            for (auto& v : voices) {
+                if (!v.isActive()) {
+                    targetVoice = &v;
+                    break;
+                }
+            }
+        }
+
+        // 3. Se não houver voz livre, rouba a voz mais antiga que já está em fase de Release
+        if (!targetVoice) {
+            uint64_t oldestAge = UINT64_MAX;
+            for (auto& v : voices) {
+                if (v.isReleasing() && v.getAge() < oldestAge) {
+                    oldestAge = v.getAge();
+                    targetVoice = &v;
+                }
+            }
+        }
+
+        // 4. Em último caso, rouba a voz mais antiga de todas
+        if (!targetVoice) {
+            uint64_t oldestAge = UINT64_MAX;
+            for (auto& v : voices) {
+                if (v.getAge() < oldestAge) {
+                    oldestAge = v.getAge();
+                    targetVoice = &v;
+                }
+            }
+        }
 
         float freq = 440.0f * powf(2.0f, (note - 69.0f) / 12.0f);
-        targetVoice->noteOn(note, freq);
+        targetVoice->noteOn(note, freq, ++voiceCounter);
     }
 
     void noteOff(int note) {
+        std::lock_guard<std::mutex> lock(voiceMutex);
+        // Desliga TODAS as vozes que estejam associadas a esta nota
         for (auto& v : voices) {
-            if (v.getNote() == note) v.noteOff(note);
+            if (v.isActive() && v.getNote() == note) {
+                v.noteOff(note);
+            }
+        }
+    }
+
+    void allNotesOff() {
+        std::lock_guard<std::mutex> lock(voiceMutex);
+        for (auto& v : voices) {
+            v.kill();
         }
     }
 
@@ -321,6 +391,7 @@ public:
     void setFilterEnvAmount(float amtHz) { filterEnvAmount = amtHz; }
 
     void setFilterADSR(float a, float d, float s, float r) {
+        std::lock_guard<std::mutex> lock(voiceMutex);
         for (auto& v : voices) v.setFilterADSR(a, d, s, r);
     }
 
@@ -332,14 +403,19 @@ public:
         float envAmt = filterEnvAmount.load();
         float masterVol = masterVolume.load();
 
+        std::unique_lock<std::mutex> lock(voiceMutex, std::try_to_lock);
+        if (!lock.owns_lock()) {
+            // Se a thread MIDI estiver alterando nota neste exato microssegundo, preenche com zero sem travar
+            std::fill(outputBuffer, outputBuffer + numFrames, 0.0f);
+            return oboe::DataCallbackResult::Continue;
+        }
+
         for (int i = 0; i < numFrames; ++i) {
             float sampleSum = 0.0f;
             for (auto& v : voices) {
                 sampleSum += v.renderSample(cutoff, res, envAmt);
             }
-
-            // Saturação final de saída (Soft Clipping Analógico)
-            outputBuffer[i] = tanhf(sampleSum * masterVol * 0.8f);
+            outputBuffer[i] = tanhf(sampleSum * masterVol * 0.65f);
         }
 
         return oboe::DataCallbackResult::Continue;
@@ -348,7 +424,7 @@ public:
 
 static AudioEngine* engine = nullptr;
 
-// --- PONTE JNI (COMUNICAÇÃO COM O KOTLIN) ---
+// --- PONTE JNI ---
 extern "C" {
 
 JNIEXPORT void JNICALL
@@ -376,6 +452,11 @@ Java_com_moogsynth_app_audio_NativeAudioEngine_noteOn(JNIEnv *env, jobject thiz,
 JNIEXPORT void JNICALL
 Java_com_moogsynth_app_audio_NativeAudioEngine_noteOff(JNIEnv *env, jobject thiz, jint note) {
     if (engine) engine->noteOff(note);
+}
+
+JNIEXPORT void JNICALL
+Java_com_moogsynth_app_audio_NativeAudioEngine_allNotesOff(JNIEnv *env, jobject thiz) {
+    if (engine) engine->allNotesOff();
 }
 
 JNIEXPORT void JNICALL
