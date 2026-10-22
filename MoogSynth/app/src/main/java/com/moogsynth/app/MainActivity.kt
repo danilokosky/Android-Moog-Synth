@@ -20,17 +20,20 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        // Inicializa Motor de Áudio
         audioEngine = AudioEngine()
         audioEngine.start()
 
-        // Inicializa Leitura MIDI
-        midiHandler = MidiHandler(this) { freq ->
-            audioEngine.playNote(freq)
-        }
+        // Passamos os dois eventos (Pressionar e Soltar) para o Motor
+        midiHandler = MidiHandler(this, 
+            onNoteOn = { note, velocity ->
+                audioEngine.noteOn(note, velocity)
+            },
+            onNoteOff = { note ->
+                audioEngine.noteOff(note)
+            }
+        )
         midiHandler.setupMidi()
 
-        // Carrega a Interface
         setContent {
             Box(
                 modifier = Modifier
