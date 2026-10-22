@@ -13,7 +13,7 @@ private:
     float sampleRate = 48000.0f;
     float frequency = 440.0f;
     float phase = 0.0f;
-    int waveType = 0;
+    int waveType = 0; // 0: Saw, 1: Square, 2: Triangle, 3: Sine
 
     float polyBlep(float t, float dt) {
         if (t < dt) {
@@ -29,7 +29,7 @@ private:
 public:
     void init(float sr) { sampleRate = sr; }
     void setFrequency(float f) { frequency = f; }
-    void setWaveType(int type) { waveType = type; }
+    void setWaveType(int type) { waveType = std::clamp(type, 0, 3); }
 
     float nextSample() {
         float dt = frequency / sampleRate;
@@ -67,15 +67,15 @@ private:
     float currentLevel = 0.0f;
 
     float attackTime = 0.008f;
-    float decayTime = 0.2f;
+    float decayTime = 0.25f;
     float sustainLevel = 0.7f;
-    float releaseTime = 0.25f;
+    float releaseTime = 0.3f;
 
 public:
     void init(float sr) { sampleRate = sr; }
 
     void setADSR(float a, float d, float s, float r) {
-        attackTime = std::max(0.001f, a);
+        attackTime = std::max(0.002f, a);
         decayTime = std::max(0.005f, d);
         sustainLevel = std::clamp(s, 0.0f, 1.0f);
         releaseTime = std::max(0.005f, r);
@@ -83,7 +83,6 @@ public:
 
     void triggerOn() {
         state = ATTACK;
-        // Não zeramos currentLevel se a voz estiver sendo re-disparada (evita cliques!)
     }
 
     void triggerOff() {
@@ -189,68 +188,47 @@ public:
 // --- VOZ POLIFÔNICA ---
 class Voice {
 private:
-    Oscillator osc1, osc2, osc3;
+    Oscillator osc[3];
     Envelope ampEnv;
     Envelope filterEnv;
     MoogLadderFilter vcf;
     int currentNote = -1;
-    uint64_t age = 0; // Usado para saber qual é a voz mais antiga no roubo de vozes
+    uint64_t age = 0;
 
 public:
     void init(float sr) {
-        osc1.init(sr); osc1.setWaveType(0);
-        osc2.init(sr); osc2.setWaveType(1);
-        osc3.init(sr); osc3.setWaveType(2);
+        for (int i = 0; i < 3; ++i) osc[i].init(sr);
+        osc[0].setWaveType(0); // Saw
+        osc[1].setWaveType(1); // Square
+        osc[2].setWaveType(2); // Triangle
 
         ampEnv.init(sr);
-        ampEnv.setADSR(0.005f, 0.25f, 0.7f, 0.25f);
+        ampEnv.setADSR(0.01f, 0.3f, 0.7f, 0.3f);
 
         filterEnv.init(sr);
-        filterEnv.setADSR(0.008f, 0.25f, 0.3f, 0.3f);
+        filterEnv.setADSR(0.01f, 0.25f, 0.2f, 0.3f);
 
         vcf.init(sr);
     }
 
-//    void noteOn(int note, float freq, uint64_t noteAge) {
-//        if (!ampEnv.isActive()) {
-//            vcf.reset();
-//        }
-//        currentNote = note;
-//        age = noteAge;
-//        osc1.setFrequency(freq);
-//        osc2.setFrequency(freq * 0.5f);
-//        osc3.setFrequency(freq * 1.4983f);
-//        ampEnv.triggerOn();
-//        filterEnv.triggerOn();
-//    }
+    void updateFrequencies(const float* oscTunes) {
+        if (currentNote < 0) return;
+        for (int i = 0; i < 3; ++i) {
+            float freq = 440.0f * powf(2.0f, (static_cast<float>(currentNote) + oscTunes[i] - 69.0f) / 12.0f);
+            osc[i].setFrequency(freq);
+        }
+    }
 
-
-    void noteOn(int note, float freq, uint64_t noteAge) {
+    void noteOn(int note, const float* oscTunes, uint64_t noteAge) {
         if (ampEnv.isIdle()) {
             vcf.reset();
         }
         currentNote = note;
         age = noteAge;
-        osc1.setFrequency(freq);
-        osc2.setFrequency(freq * 0.5f);
-        osc3.setFrequency(freq * 1.4983f);
+        updateFrequencies(oscTunes);
         ampEnv.triggerOn();
         filterEnv.triggerOn();
     }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     void noteOff(int note) {
         if (currentNote == note) {
@@ -266,6 +244,14 @@ public:
         vcf.reset();
     }
 
+    void setWaveType(int index, int type) {
+        if (index >= 0 && index < 3) osc[index].setWaveType(type);
+    }
+
+    void setAmpADSR(float a, float d, float s, float r) {
+        ampEnv.setADSR(a, d, s, r);
+    }
+
     void setFilterADSR(float a, float d, float s, float r) {
         filterEnv.setADSR(a, d, s, r);
     }
@@ -275,12 +261,12 @@ public:
     int getNote() const { return currentNote; }
     uint64_t getAge() const { return age; }
 
-    float renderSample(float baseCutoff, float resonance, float filterEnvAmt) {
+    float renderSample(const float* oscVols, float baseCutoff, float resonance, float filterEnvAmt) {
         if (ampEnv.isIdle()) return 0.0f;
 
-        float rawMix = (osc1.nextSample() * 0.55f) +
-                       (osc2.nextSample() * 0.35f) +
-                       (osc3.nextSample() * 0.30f);
+        float rawMix = (osc[0].nextSample() * oscVols[0]) +
+                       (osc[1].nextSample() * oscVols[1]) +
+                       (osc[2].nextSample() * oscVols[2]);
 
         float fEnvVal = filterEnv.nextLevel();
         float modulatedCutoff = baseCutoff + (fEnvVal * filterEnvAmt);
@@ -290,14 +276,17 @@ public:
     }
 };
 
-// --- MOTOR DE ÁUDIO OBOE COM HOT-SWAP DE DISPOSITIVOS DE ÁUDIO ---
+// --- MOTOR DE ÁUDIO OBOE ---
 class AudioEngine : public oboe::AudioStreamDataCallback, public oboe::AudioStreamErrorCallback {
 private:
     std::shared_ptr<oboe::AudioStream> stream;
-    static const int MAX_VOICES = 16; // Polifonia ampliada para 16 vozes para glissandos
+    static const int MAX_VOICES = 16;
     std::array<Voice, MAX_VOICES> voices;
     std::mutex voiceMutex;
     uint64_t voiceCounter = 0;
+
+    float oscVolumes[3] = {0.75f, 0.55f, 0.45f};
+    float oscTunes[3] = {0.0f, -12.0f, 7.0f}; // Semitons (0, -1 oitava, +5ª justa)
 
     std::atomic<float> masterVolume{0.85f};
     std::atomic<float> filterCutoff{1800.0f};
@@ -318,7 +307,7 @@ public:
                ->setFormat(oboe::AudioFormat::Float)
                ->setChannelCount(oboe::ChannelCount::Mono)
                ->setDataCallback(this)
-               ->setErrorCallback(this); // Monitora desconexão de fone USB/Bluetooth!
+               ->setErrorCallback(this);
 
         oboe::Result result = builder.openStream(stream);
         if (result == oboe::Result::OK) {
@@ -338,10 +327,8 @@ public:
         }
     }
 
-    // CHAMADO AUTOMATICAMENTE QUANDO O FONE USB É DESCONECTADO!
     void onErrorAfterClose(oboe::AudioStream *oboeStream, oboe::Result error) override {
         if (error == oboe::Result::ErrorDisconnected) {
-            // Reinicia o motor na nova saída de áudio padrão do Android em uma thread separada
             std::thread([this]() {
                 this->start();
             }).detach();
@@ -352,15 +339,12 @@ public:
         std::lock_guard<std::mutex> lock(voiceMutex);
         Voice* targetVoice = nullptr;
 
-        // 1. Se a mesma nota já está tocando, reutiliza a mesma voz (evita empilhar a mesma nota!)
         for (auto& v : voices) {
             if (v.isActive() && v.getNote() == note) {
                 targetVoice = &v;
                 break;
             }
         }
-
-        // 2. Se não, busca uma voz totalmente livre
         if (!targetVoice) {
             for (auto& v : voices) {
                 if (!v.isActive()) {
@@ -369,8 +353,6 @@ public:
                 }
             }
         }
-
-        // 3. Se não houver voz livre, rouba a voz mais antiga que já está em fase de Release
         if (!targetVoice) {
             uint64_t oldestAge = UINT64_MAX;
             for (auto& v : voices) {
@@ -380,8 +362,6 @@ public:
                 }
             }
         }
-
-        // 4. Em último caso, rouba a voz mais antiga de todas
         if (!targetVoice) {
             uint64_t oldestAge = UINT64_MAX;
             for (auto& v : voices) {
@@ -392,13 +372,11 @@ public:
             }
         }
 
-        float freq = 440.0f * powf(2.0f, (note - 69.0f) / 12.0f);
-        targetVoice->noteOn(note, freq, ++voiceCounter);
+        targetVoice->noteOn(note, oscTunes, ++voiceCounter);
     }
 
     void noteOff(int note) {
         std::lock_guard<std::mutex> lock(voiceMutex);
-        // Desliga TODAS as vozes que estejam associadas a esta nota
         for (auto& v : voices) {
             if (v.isActive() && v.getNote() == note) {
                 v.noteOff(note);
@@ -408,15 +386,38 @@ public:
 
     void allNotesOff() {
         std::lock_guard<std::mutex> lock(voiceMutex);
-        for (auto& v : voices) {
-            v.kill();
+        for (auto& v : voices) v.kill();
+    }
+
+    void setOscVolume(int index, float vol) {
+        std::lock_guard<std::mutex> lock(voiceMutex);
+        if (index >= 0 && index < 3) oscVolumes[index] = std::clamp(vol, 0.0f, 1.0f);
+    }
+
+    void setOscTune(int index, float semitones) {
+        std::lock_guard<std::mutex> lock(voiceMutex);
+        if (index >= 0 && index < 3) {
+            oscTunes[index] = semitones;
+            for (auto& v : voices) {
+                if (v.isActive()) v.updateFrequencies(oscTunes);
+            }
         }
+    }
+
+    void setOscWave(int index, int waveType) {
+        std::lock_guard<std::mutex> lock(voiceMutex);
+        for (auto& v : voices) v.setWaveType(index, waveType);
     }
 
     void setMasterVolume(float vol) { masterVolume = vol; }
     void setFilterCutoff(float cutoffHz) { filterCutoff = cutoffHz; }
     void setFilterResonance(float res) { filterResonance = res; }
     void setFilterEnvAmount(float amtHz) { filterEnvAmount = amtHz; }
+
+    void setAmpADSR(float a, float d, float s, float r) {
+        std::lock_guard<std::mutex> lock(voiceMutex);
+        for (auto& v : voices) v.setAmpADSR(a, d, s, r);
+    }
 
     void setFilterADSR(float a, float d, float s, float r) {
         std::lock_guard<std::mutex> lock(voiceMutex);
@@ -433,7 +434,6 @@ public:
 
         std::unique_lock<std::mutex> lock(voiceMutex, std::try_to_lock);
         if (!lock.owns_lock()) {
-            // Se a thread MIDI estiver alterando nota neste exato microssegundo, preenche com zero sem travar
             std::fill(outputBuffer, outputBuffer + numFrames, 0.0f);
             return oboe::DataCallbackResult::Continue;
         }
@@ -441,9 +441,9 @@ public:
         for (int i = 0; i < numFrames; ++i) {
             float sampleSum = 0.0f;
             for (auto& v : voices) {
-                sampleSum += v.renderSample(cutoff, res, envAmt);
+                sampleSum += v.renderSample(oscVolumes, cutoff, res, envAmt);
             }
-            outputBuffer[i] = tanhf(sampleSum * masterVol * 0.65f);
+            outputBuffer[i] = tanhf(sampleSum * masterVol * 0.6f);
         }
 
         return oboe::DataCallbackResult::Continue;
@@ -488,6 +488,21 @@ Java_com_moogsynth_app_audio_NativeAudioEngine_allNotesOff(JNIEnv *env, jobject 
 }
 
 JNIEXPORT void JNICALL
+Java_com_moogsynth_app_audio_NativeAudioEngine_setOscVolume(JNIEnv *env, jobject thiz, jint index, jfloat volume) {
+    if (engine) engine->setOscVolume(index, volume);
+}
+
+JNIEXPORT void JNICALL
+Java_com_moogsynth_app_audio_NativeAudioEngine_setOscTune(JNIEnv *env, jobject thiz, jint index, jfloat semitones) {
+    if (engine) engine->setOscTune(index, semitones);
+}
+
+JNIEXPORT void JNICALL
+Java_com_moogsynth_app_audio_NativeAudioEngine_setOscWave(JNIEnv *env, jobject thiz, jint index, jint waveType) {
+    if (engine) engine->setOscWave(index, waveType);
+}
+
+JNIEXPORT void JNICALL
 Java_com_moogsynth_app_audio_NativeAudioEngine_setMasterVolume(JNIEnv *env, jobject thiz, jfloat volume) {
     if (engine) engine->setMasterVolume(volume);
 }
@@ -505,6 +520,11 @@ Java_com_moogsynth_app_audio_NativeAudioEngine_setFilterResonance(JNIEnv *env, j
 JNIEXPORT void JNICALL
 Java_com_moogsynth_app_audio_NativeAudioEngine_setFilterEnvAmount(JNIEnv *env, jobject thiz, jfloat envAmountHz) {
     if (engine) engine->setFilterEnvAmount(envAmountHz);
+}
+
+JNIEXPORT void JNICALL
+Java_com_moogsynth_app_audio_NativeAudioEngine_setAmpADSR(JNIEnv *env, jobject thiz, jfloat a, jfloat d, jfloat s, jfloat r) {
+    if (engine) engine->setAmpADSR(a, d, s, r);
 }
 
 JNIEXPORT void JNICALL
