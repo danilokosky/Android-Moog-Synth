@@ -14,12 +14,14 @@ import com.moogsynth.app.audio.NativeAudioEngine
 import com.moogsynth.app.midi.MidiHandler
 import com.moogsynth.app.ui.SynthScreen
 
+data class MidiCCEvent(val cc: Int, val value: Int, val seq: Long)
+
 class MainActivity : ComponentActivity() {
     private lateinit var audioEngine: NativeAudioEngine
     private lateinit var midiHandler: MidiHandler
+    private var ccSequence = 0L
 
-    // Evento reativo para enviar comandos CC ao MIDI Learn da UI
-    private val lastMidiCC = mutableStateOf<Pair<Int, Int>?>(null)
+    private val lastMidiCC = mutableStateOf<MidiCCEvent?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -31,7 +33,9 @@ class MainActivity : ComponentActivity() {
             context = this,
             onNoteOn = { note, velocity -> audioEngine.noteOn(note, velocity) },
             onNoteOff = { note -> audioEngine.noteOff(note) },
-            onControlChange = { cc, value -> lastMidiCC.value = Pair(cc, value) },
+            onControlChange = { cc, value ->
+                lastMidiCC.value = MidiCCEvent(cc, value, ++ccSequence)
+            },
             onAllNotesOff = { audioEngine.allNotesOff() }
         )
         midiHandler.setupMidi()
