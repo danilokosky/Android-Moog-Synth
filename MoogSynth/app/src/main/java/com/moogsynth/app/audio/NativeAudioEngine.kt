@@ -10,8 +10,8 @@ class NativeAudioEngine {
     external fun stopEngine()
     external fun noteOn(note: Int, velocity: Int)
     external fun noteOff(note: Int)
+    external fun allNotesOff()
 
-    // Controles Master e Moog Ladder VCF
     external fun setMasterVolume(volume: Float)
     external fun setFilterCutoff(cutoffHz: Float)
     external fun setFilterResonance(resonance: Float)
