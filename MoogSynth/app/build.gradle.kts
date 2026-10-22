@@ -13,6 +13,13 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
+        
+        // Configuração do compilador C++
+        externalNativeBuild {
+            cmake {
+                cppFlags += "-std=c++17 -O3" // -O3 ativa a otimização máxima de performance
+            }
+        }
     }
 
     buildTypes {
@@ -27,11 +34,21 @@ android {
     kotlinOptions {
         jvmTarget = "1.8"
     }
+    
     buildFeatures {
         compose = true
+        prefab = true // ESSENCIAL: Permite importar bibliotecas C++ pré-compiladas (como o Oboe)
     }
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.8"
+    }
+    
+    // Aponta onde estará o nosso roteiro de compilação C++
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
     }
 }
 
@@ -44,4 +61,7 @@ dependencies {
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
+    
+    // Biblioteca oficial do Google para Áudio de Ultra Baixa Latência em C++
+    implementation("com.google.oboe:oboe:1.8.1")
 }
