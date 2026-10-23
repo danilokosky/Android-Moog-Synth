@@ -17,16 +17,14 @@ static inline float fastTanh(float x) {
     return x * (27.0f + x2) / (27.0f + 9.0f * x2);
 }
 
-// Filtro Passa-Altas (HPF) para limpar lixo subsônico e evitar intermodulação no Filtro Moog
-class VoiceDCBlocker {
+// Bloqueador de DC Master super lento (1.5Hz) para limpar lama sem causar "soquinhos"
+class DCBlocker {
 private:
     float x1 = 0.0f;
     float y1 = 0.0f;
 public:
-    void reset() { x1 = 0.0f; y1 = 0.0f; }
     float process(float x) {
-        // Corte suave em ~45Hz para manter o grave, mas remover o rumble que embola o som
-        float y = x - x1 + 0.985f * y1;
+        float y = x - x1 + 0.9997f * y1; 
         x1 = x;
         y1 = y;
         return y;
@@ -53,13 +51,9 @@ private:
     }
 
 public:
-    void init(float sr) {
+    void init(float sr, float initialPhase = 0.0f) {
         sampleRate = sr;
-        phase = 0.0f;
-    }
-
-    void resetPhase() {
-        phase = 0.0f; // GARANTE ataque agressivo sem cancelamento de fase inicial (Evita o "punch" atrasado)
+        phase = initialPhase - std::floor(initialPhase);
     }
 
     void setFrequency(float f) {
@@ -117,7 +111,7 @@ private:
     void recalcCoeffs() {
         float sr = std::max(8000.0f, sampleRate);
         float atkSamples = std::max(1.0f, attackTime * sr);
-        attackCoeff = 1.0f - expf(-1.6f / atkSamples);
+        attackCoeff = 1.0f - expf(-1.8f / atkSamples);
         float decSamples = std::max(1.0f, decayTime * sr);
         decayCoeff = 1.0f - expf(-4.5f / decSamples);
         float relSamples = std::max(1.0f, releaseTime * sr);
@@ -138,11 +132,8 @@ public:
         recalcCoeffs();
     }
 
-    void triggerOn() { 
-        state = ATTACK; 
-        currentLevel = 0.0f; // Reset absoluto: impede transientes fantasmas de vozes roubadas
-    }
-    
+    // NUNCA zerar abruptamente o currentLevel aqui para evitar cliques e trancos na nota
+    void triggerOn() { state = ATTACK; }
     void triggerOff() { if (state != IDLE) state = RELEASE; }
     void kill() { state = IDLE; currentLevel = 0.0f; }
 
@@ -196,6 +187,7 @@ public:
         reset();
     }
 
+    // Não chamamos reset a cada nota para manter o fluxo analógico orgânico
     void reset() {
         for (int i = 0; i < 4; ++i) stage[i] = 0.0f;
         prevInput = 0.0f;
@@ -216,9 +208,8 @@ public:
         float highFreqDamp = 1.0f - (normFreq * 0.35f);
         float k = resShaped * 3.85f * std::clamp(highFreqDamp, 0.55f, 1.0f);
 
-        // Drive otimizado para evitar saturação barrenta nas frequências baixas
-        float driveGain = 1.0f + (driveNorm * 1.2f);
-        float bassComp = 1.0f + (resShaped * 0.15f); // Reduzido drasticamente para evitar lama polifônica
+        float driveGain = 1.0f + (driveNorm * 1.5f);
+        float bassComp = 1.0f + (resShaped * 0.4f); 
 
         float out = 0.0f;
         float invOs = 1.0f / static_cast<float>(os);
@@ -239,7 +230,7 @@ public:
         }
 
         prevInput = input;
-        float driveComp = 1.0f / (1.0f + driveNorm * 0.25f);
+        float driveComp = 1.0f / (1.0f + driveNorm * 0.35f);
         return out * driveComp;
     }
 };
@@ -251,12 +242,9 @@ private:
     std::vector<float> bufferR;
     int writeIdx = 0;
     float sampleRate = 48000.0f;
-    float lpStateL = 0.0f;
-    float lpStateR = 0.0f;
-    float hpStateL = 0.0f;
-    float hpStateR = 0.0f;
-    float wowPhase = 0.0f;
-    float flutterPhase = 0.0f;
+    float lpStateL = 0.0f, lpStateR = 0.0f;
+    float hpStateL = 0.0f, hpStateR = 0.0f;
+    float wowPhase = 0.0f, flutterPhase = 0.0f;
 
     float readFractional(const std::vector<float>& buf, float delaySamples) const {
         int size = static_cast<int>(buf.size());
@@ -335,7 +323,6 @@ private:
     Envelope ampEnv;
     Envelope filterEnv;
     MoogLadderFilter vcf;
-    VoiceDCBlocker rumbleFilter; // NOVO: Limpador de embolo individual por voz
 
     int currentNote = -1;
     uint64_t age = 0;
@@ -355,7 +342,8 @@ public:
     void init(float sr, int idx) {
         rngState = 13579u + static_cast<uint32_t>(idx * 98765u);
         for (int i = 0; i < 3; ++i) {
-            osc[i].init(sr);
+            float initPhase = (nextWhiteNoise() + 1.0f) * 0.5f;
+            osc[i].init(sr, initPhase);
             oscStaticCalibrationSt[i] = nextWhiteNoise() * 0.045f;
             oscDriftSt[i] = 0.0f;
         }
@@ -364,7 +352,6 @@ public:
         ampEnv.init(sr); ampEnv.setADSR(0.01f, 0.3f, 0.7f, 0.3f);
         filterEnv.init(sr); filterEnv.setADSR(0.01f, 0.25f, 0.2f, 0.3f);
         vcf.init(sr);
-        rumbleFilter.reset();
     }
 
     void updateFrequencies(const float* oscTunes, float driftAmount) {
@@ -377,14 +364,6 @@ public:
     }
 
     void noteOn(int note, int velocity, const float* oscTunes, float driftAmount, uint64_t noteAge) {
-        vcf.reset();
-        rumbleFilter.reset();
-        
-        // Zera as fases de todos os osciladores para alinhamento perfeito (elimina o "punch" / cancelamento)
-        for (int i = 0; i < 3; ++i) {
-            osc[i].resetPhase();
-        }
-
         currentNote = note;
         noteVelocity = std::clamp(static_cast<float>(velocity) / 127.0f, 0.05f, 1.0f);
         age = noteAge;
@@ -425,9 +404,6 @@ public:
                        (osc[1].nextSample() * oscVols[1]) +
                        (osc[2].nextSample() * oscVols[2]);
 
-        // A MÁGICA DA CLAREZA: Removemos o lixo subsônico DA PRÓPRIA VOZ antes da saturação
-        float cleanOscMix = rumbleFilter.process(rawMix);
-
         float fEnvVal = filterEnv.nextLevel();
         float velFactor = (1.0f - velSensAmount) + (noteVelocity * velSensAmount);
         float velFilterBoost = (1.0f - velSensAmount * 0.5f) + (noteVelocity * velSensAmount * 0.5f);
@@ -439,8 +415,8 @@ public:
         float voiceDriftFactor = 1.0f + ((filterCutoffCalibration - 1.0f) * driftAmount);
         float modulatedCutoff = baseCutoff * voiceDriftFactor * exp2f(totalOctaves);
 
-        // Alimentamos o filtro Moog apenas com o sinal limpo (cleanOscMix)
-        float filteredSignal = vcf.process(cleanOscMix * 0.35f, modulatedCutoff, resonance, driveNorm, oversampleFactor);
+        // Restaurado o ganho volumoso de 0.55 na entrada do filtro Moog!
+        float filteredSignal = vcf.process(rawMix * 0.55f, modulatedCutoff, resonance, driveNorm, oversampleFactor);
 
         float vcaOut = fastTanh(filteredSignal * (1.0f + driveNorm * 0.35f));
         return vcaOut * ampEnv.nextLevel() * velFactor;
@@ -455,6 +431,7 @@ private:
     std::array<Voice, MAX_VOICES> voices;
     Oscillator lfo;
     AnalogDelay tapeDelay;
+    DCBlocker dcBlockerL, dcBlockerR; 
     std::mutex voiceMutex;
     uint64_t voiceCounter = 0;
 
@@ -615,8 +592,9 @@ public:
         for (int vIdx = 0; vIdx < polyLimit; ++vIdx) if (voices[vIdx].isActive()) currentlyActive++;
         activeVoiceCount.store(currentlyActive);
 
-        float headroomK = 1.0f / sqrtf(static_cast<float>(std::max(1, currentlyActive)));
-        float mixGain = headroomK * 0.85f;
+        // HEADROOM INTELIGENTE: Mais sutil, preservando o máximo de volume sem rachar o limiter
+        float activeK = std::max(1.0f, static_cast<float>(currentlyActive));
+        float mixGain = 0.65f / powf(activeK, 0.4f);
 
         for (int i = 0; i < numFrames; ++i) {
             smoothCutoff += smoothCoeff * (targetCutoff - smoothCutoff);
@@ -644,8 +622,12 @@ public:
             float delayedL = 0.0f, delayedR = 0.0f;
             tapeDelay.processStereo(sumL, sumR, smoothDelayTime, dFb, dMix, spread, delayedL, delayedR);
 
-            float outL = fastTanh(delayedL * smoothMaster);
-            float outR = fastTanh(delayedR * smoothMaster);
+            float cleanL = dcBlockerL.process(delayedL);
+            float cleanR = dcBlockerR.process(delayedR);
+
+            // GANHO DE MAQUIAGEM FINAL (1.6x) PARA RESTAURAR O VOLUME GERAL COM FORÇA!
+            float outL = fastTanh(cleanL * smoothMaster * 1.6f);
+            float outR = fastTanh(cleanR * smoothMaster * 1.6f);
 
             outputBuffer[i * 2] = outL;
             outputBuffer[i * 2 + 1] = outR;
