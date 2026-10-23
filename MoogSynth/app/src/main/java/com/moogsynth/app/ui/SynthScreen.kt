@@ -1,5 +1,6 @@
 package com.moogsynth.app.ui
 
+import android.content.Context
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -10,7 +11,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -18,6 +25,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -25,12 +33,25 @@ import com.moogsynth.app.MidiCCEvent
 import com.moogsynth.app.audio.NativeAudioEngine
 import com.moogsynth.app.ui.components.Knob
 import kotlinx.coroutines.delay
+import org.json.JSONArray
+import org.json.JSONObject
+import java.util.UUID
 import kotlin.math.exp
 import kotlin.math.ln
 import kotlin.math.roundToInt
 
+// Modelo de Slot de Mapeamento MIDI (ex: "Launchkey MK4")
+data class MidiMappingSlot(
+    val id: String = UUID.randomUUID().toString(),
+    val name: String,
+    val mappings: Map<String, Int>
+)
+
 @Composable
 fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = null) {
+    val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences("moog_midi_slots_prefs", Context.MODE_PRIVATE) }
+
     // Estados dos Osciladores
     var osc1Vol by remember { mutableStateOf(0.75f) }
     var osc1Tune by remember { mutableStateOf(0.5f) }
@@ -67,10 +88,99 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
     var aRelease by remember { mutableStateOf(0.3f) }
     var masterNorm by remember { mutableStateOf(0.85f) }
 
-    // Sistema MIDI Learn Contínuo
+    // --- SISTEMA DE SLOTS E PERSISTÊNCIA DO MIDI LEARN ---
     var isMidiLearnMode by remember { mutableStateOf(false) }
     var selectedParamForLearn by remember { mutableStateOf<String?>(null) }
     val paramToCCMap = remember { mutableStateMapOf<String, Int>() }
+
+    val midiSlots = remember { mutableStateListOf<MidiMappingSlot>() }
+    var currentSlotId by remember { mutableStateOf("") }
+    var isSlotDropdownExpanded by remember { mutableStateOf(false) }
+
+    // Estado da caixa de diálogo para Criar ou Renomear Slot
+    var showSlotDialog by remember { mutableStateOf(false) }
+    var isCreatingNewSlot by remember { mutableStateOf(false) }
+    var slotNameInput by remember { mutableStateOf("") }
+
+    // Função que grava todos os Slots e o Slot ativo na memória permanente do Android
+    fun saveSlotsToDisk(slots: List<MidiMappingSlot>, activeId: String) {
+        val root = JSONObject()
+        root.put("activeSlotId", activeId)
+        val arr = JSONArray()
+        slots.forEach { slot ->
+            val obj = JSONObject()
+            obj.put("id", slot.id)
+            obj.put("name", slot.name)
+            val mapObj = JSONObject()
+            slot.mappings.forEach { (k, v) -> mapObj.put(k, v) }
+            obj.put("mappings", mapObj)
+            arr.put(obj)
+        }
+        root.put("slots", arr)
+        prefs.edit().putString("saved_midi_slots_json", root.toString()).apply()
+    }
+
+    // Sincroniza qualquer alteração do mapa atual imediatamente dentro do Slot ativo e salva no disco
+    fun syncCurrentMapToActiveSlot() {
+        val idx = midiSlots.indexOfFirst { it.id == currentSlotId }
+        if (idx != -1) {
+            midiSlots[idx] = midiSlots[idx].copy(mappings = paramToCCMap.toMap())
+            saveSlotsToDisk(midiSlots, currentSlotId)
+        }
+    }
+
+    // Carrega um Slot específico para os controles ativos
+    fun selectSlot(slot: MidiMappingSlot) {
+        currentSlotId = slot.id
+        paramToCCMap.clear()
+        paramToCCMap.putAll(slot.mappings)
+        saveSlotsToDisk(midiSlots, currentSlotId)
+    }
+
+    // Carrega os Slots salvos assim que o aplicativo abre
+    LaunchedEffect(Unit) {
+        val rawJson = prefs.getString("saved_midi_slots_json", null)
+        if (rawJson != null) {
+            try {
+                val root = JSONObject(rawJson)
+                val savedActiveId = root.optString("activeSlotId", "")
+                val arr = root.getJSONArray("slots")
+                val loaded = mutableListOf<MidiMappingSlot>()
+                for (i in 0 until arr.length()) {
+                    val obj = arr.getJSONObject(i)
+                    val id = obj.getString("id")
+                    val name = obj.getString("name")
+                    val mapObj = obj.getJSONObject("mappings")
+                    val map = mutableMapOf<String, Int>()
+                    val keys = mapObj.keys()
+                    while (keys.hasNext()) {
+                        val k = keys.next()
+                        map[k] = mapObj.getInt(k)
+                    }
+                    loaded.add(MidiMappingSlot(id, name, map))
+                }
+                if (loaded.isNotEmpty()) {
+                    midiSlots.clear()
+                    midiSlots.addAll(loaded)
+                    val active = loaded.find { it.id == savedActiveId } ?: loaded.first()
+                    currentSlotId = active.id
+                    paramToCCMap.clear()
+                    paramToCCMap.putAll(active.mappings)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+        // Se for a primeira vez abrindo o app, cria o slot inicial padrão
+        if (midiSlots.isEmpty()) {
+            val defaultSlot = MidiMappingSlot(name = "Launchkey MK4", mappings = emptyMap())
+            midiSlots.add(defaultSlot)
+            currentSlotId = defaultSlot.id
+            saveSlotsToDisk(midiSlots, currentSlotId)
+        }
+    }
+
+    val currentSlotName = midiSlots.find { it.id == currentSlotId }?.name ?: "Slot 1"
 
     fun normToCutoffHz(norm: Float): Float {
         val minHz = 20f
@@ -109,20 +219,21 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
         }
     }
 
-    // Escuta comandos MIDI CC
+    // Escuta comandos MIDI CC e salva automaticamente no Slot atual ao mapear
     LaunchedEffect(incomingMidiCC) {
         incomingMidiCC?.let { event ->
             val norm = (event.value / 127f).coerceIn(0f, 1f)
             if (isMidiLearnMode && selectedParamForLearn != null) {
                 val targetParam = selectedParamForLearn!!
-                // Remove CC duplicado se já estivesse em outro knob
                 val previousKeys = paramToCCMap.filterValues { it == event.cc }.keys.toList()
                 previousKeys.forEach { paramToCCMap.remove(it) }
 
                 paramToCCMap[targetParam] = event.cc
                 updateParamById(targetParam, norm)
-                
-                // Mantém o modo MIDI Learn ativo para você poder mapear o próximo knob em sequência!
+
+                // Auto-Save imediato no Slot ativo!
+                syncCurrentMapToActiveSlot()
+
                 selectedParamForLearn = null
             } else {
                 paramToCCMap.forEach { (paramId, mappedCC) ->
@@ -141,8 +252,11 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
             valueText = valueText,
             value = value,
             isLearningSelected = (isMidiLearnMode && selectedParamForLearn == paramId),
-            mappedCC = if (isMidiLearnMode) paramToCCMap[paramId] else null, // Balãozinho só aparece no modo Learn
-            onUnmap = { paramToCCMap.remove(paramId) },
+            mappedCC = if (isMidiLearnMode) paramToCCMap[paramId] else null,
+            onUnmap = {
+                paramToCCMap.remove(paramId)
+                syncCurrentMapToActiveSlot() // Auto-Save ao remover mapeamento no '×'
+            },
             onKnobClick = {
                 if (isMidiLearnMode) {
                     selectedParamForLearn = paramId
@@ -170,6 +284,71 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
         }
     }
 
+    // Diálogo Modal para Renomear ou Criar Novo Slot
+    if (showSlotDialog) {
+        AlertDialog(
+            onDismissRequest = { showSlotDialog = false },
+            containerColor = Color(0xFF181B20),
+            titleContentColor = Color.White,
+            textContentColor = Color.LightGray,
+            title = {
+                Text(
+                    text = if (isCreatingNewSlot) "Novo Slot de Controlador" else "Renomear Slot Atual",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column {
+                    Text(
+                        text = "Digite o nome do controlador ou perfil MIDI (ex: Launchkey MK4):",
+                        fontSize = 12.sp,
+                        color = Color(0xFF94A3B8)
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    OutlinedTextField(
+                        value = slotNameInput,
+                        onValueChange = { slotNameInput = it },
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = Color(0xFFF59E0B),
+                            unfocusedBorderColor = Color(0xFF334155),
+                            cursorColor = Color(0xFFF59E0B)
+                        )
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val finalName = slotNameInput.trim().ifEmpty { "Controlador MIDI" }
+                        if (isCreatingNewSlot) {
+                            val newSlot = MidiMappingSlot(name = finalName, mappings = emptyMap())
+                            midiSlots.add(newSlot)
+                            selectSlot(newSlot)
+                        } else {
+                            val idx = midiSlots.indexOfFirst { it.id == currentSlotId }
+                            if (idx != -1) {
+                                midiSlots[idx] = midiSlots[idx].copy(name = finalName)
+                                saveSlotsToDisk(midiSlots, currentSlotId)
+                            }
+                        }
+                        showSlotDialog = false
+                    }
+                ) {
+                    Text("SALVAR", color = Color(0xFFF59E0B), fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSlotDialog = false }) {
+                    Text("CANCELAR", color = Color.Gray)
+                }
+            }
+        )
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -178,7 +357,7 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
             .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Barra Superior
+        // Barra Superior: Título + Osciloscópio + Seletor de Slots MIDI + MIDI Learn + Panic
         Row(
             modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -193,10 +372,10 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
                 )
                 Text(
                     text = if (isMidiLearnMode) {
-                        if (selectedParamForLearn == null) "MIDI LEARN ATIVO: Clique num botão da tela para selecioná-lo..."
-                        else "AGUARDANDO CONTROLLER: Gire um Knob físico para mapear [$selectedParamForLearn]!"
-                    } else "C++ OBOE | 3x POLYBLEP VCO | 24dB LADDER | LFO & TAPE DELAY",
-                    color = if (isMidiLearnMode) Color(0xFFFBBF24) else Color.Gray,
+                        if (selectedParamForLearn == null) "MIDI LEARN [$currentSlotName]: Clique num botão da tela para mapear..."
+                        else "AGUARDANDO HARDWARE: Gire um Knob físico para gravar em [$currentSlotName]!"
+                    } else "PERFIL MIDI ATIVO: $currentSlotName (${paramToCCMap.size} controles mapeados)",
+                    color = if (isMidiLearnMode) Color(0xFFFBBF24) else Color(0xFF94A3B8),
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold
                 )
@@ -204,7 +383,151 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
 
             OscilloscopeView(waveform = waveformBuffer, trigger = frameTrigger)
 
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // --- SELETOR DE SLOTS DE MAPEAMENTO MIDI (AO LADO DO MIDI LEARN) ---
+                Box {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .background(Color(0xFF181B20), RoundedCornerShape(6.dp))
+                            .border(1.dp, Color(0xFF334155), RoundedCornerShape(6.dp))
+                    ) {
+                        // Botão Principal que abre a lista de Slots
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .clickable { isSlotDropdownExpanded = true }
+                                .padding(horizontal = 12.dp, vertical = 8.dp)
+                        ) {
+                            Text(
+                                text = "🎛️ $currentSlotName",
+                                color = Color(0xFFE2E8F0),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("▼", color = Color(0xFFF59E0B), fontSize = 10.sp)
+                        }
+
+                        // Divisória vertical sutil
+                        Box(
+                            modifier = Modifier
+                                .width(1.dp)
+                                .height(22.dp)
+                                .background(Color(0xFF334155))
+                        )
+
+                        // Botão para Renomear o Slot Atual (Ícone Lápis)
+                        Box(
+                            modifier = Modifier
+                                .clickable {
+                                    slotNameInput = currentSlotName
+                                    isCreatingNewSlot = false
+                                    showSlotDialog = true
+                                }
+                                .padding(horizontal = 10.dp, vertical = 8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("✎", color = Color(0xFF38BDF8), fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    // Menu Dropdown com a Lista de Slots Salvos + Botão [×] para apagar + Novo Slot
+                    DropdownMenu(
+                        expanded = isSlotDropdownExpanded,
+                        onDismissRequest = { isSlotDropdownExpanded = false },
+                        modifier = Modifier
+                            .background(Color(0xFF1E2229))
+                            .border(1.dp, Color(0xFF334155), RoundedCornerShape(6.dp))
+                            .width(250.dp)
+                    ) {
+                        midiSlots.forEach { slot ->
+                            val isSelected = (slot.id == currentSlotId)
+                            DropdownMenuItem(
+                                text = {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = slot.name,
+                                                color = if (isSelected) Color(0xFFF59E0B) else Color.White,
+                                                fontSize = 12.sp,
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                            )
+                                            Text(
+                                                text = "${slot.mappings.size} CCs salvos",
+                                                color = Color.Gray,
+                                                fontSize = 10.sp
+                                            )
+                                        }
+
+                                        // Botão [×] para apagar o Slot da lista
+                                        Box(
+                                            modifier = Modifier
+                                                .size(22.dp)
+                                                .background(Color(0xFF7F1D1D), CircleShape)
+                                                .clickable {
+                                                    if (midiSlots.size > 1) {
+                                                        val removingActive = (slot.id == currentSlotId)
+                                                        midiSlots.remove(slot)
+                                                        if (removingActive) {
+                                                            selectSlot(midiSlots.first())
+                                                        } else {
+                                                            saveSlotsToDisk(midiSlots, currentSlotId)
+                                                        }
+                                                    } else {
+                                                        // Se for o único slot, limpa os mapeamentos dele
+                                                        paramToCCMap.clear()
+                                                        syncCurrentMapToActiveSlot()
+                                                    }
+                                                },
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text("×", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                },
+                                onClick = {
+                                    selectSlot(slot)
+                                    isSlotDropdownExpanded = false
+                                }
+                            )
+                        }
+
+                        // Linha separadora e botão "+ NOVO SLOT"
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(1.dp)
+                                .background(Color(0xFF334155))
+                        )
+
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    text = "+ NOVO SLOT DE CONTROLADOR...",
+                                    color = Color(0xFF38BDF8),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            },
+                            onClick = {
+                                isSlotDropdownExpanded = false
+                                slotNameInput = "Controlador ${midiSlots.size + 1}"
+                                isCreatingNewSlot = true
+                                showSlotDialog = true
+                            }
+                        )
+                    }
+                }
+
+                // Botão MIDI LEARN
                 Box(
                     modifier = Modifier
                         .background(
@@ -230,6 +553,7 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
                     )
                 }
 
+                // Botão PANIC
                 Box(
                     modifier = Modifier
                         .background(Color(0xFF991B1B), RoundedCornerShape(6.dp))
@@ -375,7 +699,6 @@ fun KnobControl(
                         fontSize = 8.sp,
                         fontWeight = FontWeight.ExtraBold
                     )
-                    // Botão X para desmapear
                     Box(
                         modifier = Modifier
                             .size(12.dp)
@@ -451,8 +774,8 @@ fun OscillatorRow(
 fun OscilloscopeView(waveform: FloatArray, trigger: Int) {
     Box(
         modifier = Modifier
-            .width(220.dp)
-            .height(52.dp)
+            .width(200.dp)
+            .height(50.dp)
             .background(Color(0xFF07090C), RoundedCornerShape(6.dp))
             .border(1.dp, Color(0xFF2D323B), RoundedCornerShape(6.dp))
             .padding(4.dp)
