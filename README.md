@@ -7,3 +7,7 @@ Na primeira vez que você abrir o aplicativo atualizado, ele já virá carregado
 ​Stranger Synth Pluck: Timbre percussivo oitentista com Decay curto, sem Sustain, e bastante Tape Delay analógico.
 ​Cosmic Analog Pad: Colchão harmônico em quinta justa (+7 st no OSC 3) com ataque e release longos e modulação suave de LFO.
 ​Sci-Fi Filter Sweep: Efeito espacial com ressonância no limite da auto-oscilação (85%) e LFO varrendo o filtro Ladder.
+
+
+
+Danilo Laskosky Mota
