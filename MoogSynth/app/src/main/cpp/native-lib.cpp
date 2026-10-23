@@ -473,12 +473,12 @@ public:
         // CONTORNO SUB-BASS MOOG: Dá peso, corpo e presença às notas graves (< C4)
         // para que o baixo tenha fundamento profundo e nunca se esconda atrás das notas agudas!
         float lowNoteWeight = std::clamp((64.0f - static_cast<float>(currentNote)) / 28.0f, 0.0f, 1.0f);
-        float shelfAlpha = 1100.0f / sampleRate; // Filtro shelf centrado em ~180Hz
+        float shelfAlpha = std::clamp(1100.0f / sampleRate, 0.001f, 0.2f); // Filtro shelf centrado em ~180Hz
         bassShelfState += shelfAlpha * (filteredSignal - bassShelfState);
-        floatfullBodySignal = filteredSignal + (bassShelfState * lowNoteWeight * 0.65f);
+        float fullBodySignal = filteredSignal + (bassShelfState * lowNoteWeight * 0.65f);
 
         // Saída do VCA 100% linear (sem fastTanh esmagando a dinâmica da nota!)
-        return floatfullBodySignal * ampEnv.nextLevel() * velFactor;
+        return fullBodySignal * ampEnv.nextLevel() * velFactor;
     }
 };
 
@@ -717,7 +717,7 @@ JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setFilterE
 JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setLfoRate(JNIEnv *env, jobject thiz, jfloat rateHz) { if (engine) engine->setLfoRate(rateHz); }
 JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setLfoDepth(JNIEnv *env, jobject thiz, jfloat depthHz) { if (engine) engine->setLfoDepth(depthHz); }
 JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setDelayParams(JNIEnv *env, jobject thiz, jfloat timeSec, jfloat feedback, jfloat mix) { if (engine) engine->setDelayParams(timeSec, feedback, mix); }
-JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setAmpADSR(JNIEnv *env, jobject thiz, jfloat a, jfloat d, float s, float r) { if (engine) engine->setAmpADSR(a, d, s, r); }
+JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setAmpADSR(JNIEnv *env, jobject thiz, jfloat a, jfloat d, jfloat s, jfloat r) { if (engine) engine->setAmpADSR(a, d, s, r); }
 JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setFilterADSR(JNIEnv *env, jobject thiz, jfloat a, jfloat d, jfloat s, jfloat r) { if (engine) engine->setFilterADSR(a, d, s, r); }
 JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_getWaveform(JNIEnv *env, jobject thiz, jfloatArray outArray) { if (!engine) return; jsize len = env->GetArrayLength(outArray); jfloat* body = env->GetFloatArrayElements(outArray, nullptr); engine->copyScopeData(body, len); env->ReleaseFloatArrayElements(outArray, body, 0); }
 JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setOversampling(JNIEnv *env, jobject thiz, jint factor) { if (engine) engine->setOversampling(factor); }
