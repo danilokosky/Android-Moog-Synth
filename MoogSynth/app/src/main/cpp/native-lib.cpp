@@ -124,12 +124,11 @@ public:
     }
 };
 
-// --- FILTRO MOOG LADDER 24dB/OCT ---
+// --- FILTRO MOOG LADDER 24dB/OCT CALIBRADO (SEM APITO PREMATURO + COMPENSAÇÃO DE GRAVES) ---
 class MoogLadderFilter {
 private:
     float sampleRate = 48000.0f;
     float stage[4] = {0.0f, 0.0f, 0.0f, 0.0f};
-    float delay[4] = {0.0f, 0.0f, 0.0f, 0.0f};
 
 public:
     void init(float sr) {
@@ -140,35 +139,38 @@ public:
     void reset() {
         for (int i = 0; i < 4; ++i) {
             stage[i] = 0.0f;
-            delay[i] = 0.0f;
         }
     }
 
     float process(float input, float cutoffHz, float resonance) {
-        float fc = std::clamp(cutoffHz, 20.0f, sampleRate * 0.42f);
-        float f = (2.0f * fc) / sampleRate;
+        // Limita a frequência de corte na faixa musical segura
+        float fc = std::clamp(cutoffHz, 20.0f, sampleRate * 0.38f);
 
-        float p = f * (1.8f - 0.8f * f);
-        float k = 2.0f * sinf(f * static_cast<float>(M_PI) * 0.5f) - 1.0f;
+        // Coeficiente de corte unipolar exato (g = 1 - exp(-2*pi*fc/sr))
+        float g = 1.0f - expf(-2.0f * static_cast<float>(M_PI) * fc / sampleRate);
+        g = std::clamp(g, 0.0001f, 0.82f);
 
-        float t1 = (1.0f - p) * 1.386249f;
-        float t2 = 12.0f + t1 * t1;
-        float resScaled = std::clamp(resonance, 0.0f, 0.98f) * 4.0f;
-        float r = resScaled * (t2 + 6.0f * t1) / (t2 - 6.0f * t1);
+        // Curva de ressonância progressiva:
+        // De 0% a 75% o controle é super musical e cremoso; apenas perto de 95-100% chega perto da auto-oscilação
+        float resNorm = std::clamp(resonance, 0.0f, 1.0f);
+        float resShaped = powf(resNorm, 1.5f);
 
-        float x = input - r * stage[3];
+        // Atenua levemente o excesso de Q em frequências muito agudas para nunca apitar estridente
+        float highFreqDamp = 1.0f - (g * 0.28f);
+        float k = resShaped * 3.65f * highFreqDamp;
 
-        stage[0] = x * p + delay[0] * p - k * stage[0];
-        stage[1] = stage[0] * p + delay[1] * p - k * stage[1];
-        stage[2] = stage[1] * p + delay[2] * p - k * stage[2];
-        stage[3] = stage[2] * p + delay[3] * p - k * stage[3];
+        // Compensação de volume do sinal dos osciladores (evita que os osciladores sumam quando sobe a ressonância)
+        float compensatedInput = input * (1.0f + resShaped * 0.55f);
 
-        stage[3] = tanhf(stage[3]);
+        // Feedback negativo com saturação suave no caminho de retorno
+        float feedback = k * tanhf(stage[3] * 0.85f);
+        float u = tanhf(compensatedInput - feedback);
 
-        delay[0] = x;
-        delay[1] = stage[0];
-        delay[2] = stage[1];
-        delay[3] = stage[2];
+        // 4 estágios de 1 polo em cascata com saturação térmica analógica entre os transistores
+        stage[0] += g * (u - stage[0]);
+        stage[1] += g * (tanhf(stage[0]) - stage[1]);
+        stage[2] += g * (tanhf(stage[1]) - stage[2]);
+        stage[3] += g * (tanhf(stage[2]) - stage[3]);
 
         return stage[3];
     }
@@ -185,7 +187,7 @@ private:
 public:
     void init(float sr) {
         sampleRate = sr;
-        buffer.assign(static_cast<size_t>(sr * 1.5f), 0.0f); // Até 1.5s de Delay
+        buffer.assign(static_cast<size_t>(sr * 1.5f), 0.0f);
         writeIdx = 0;
         lpState = 0.0f;
     }
@@ -208,7 +210,6 @@ public:
         if (readIdx < 0) readIdx += static_cast<int>(buffer.size());
 
         float delayed = buffer[readIdx];
-        // Filtro passa-baixas analógico nas repetições para simular fita magnética
         lpState += 0.25f * (delayed - lpState);
 
         buffer[writeIdx] = tanhf(input + lpState * std::clamp(feedback, 0.0f, 0.92f));
@@ -304,7 +305,8 @@ public:
         float fEnvVal = filterEnv.nextLevel();
         float modulatedCutoff = baseCutoff + (fEnvVal * filterEnvAmt) + lfoModHz;
 
-        float filteredSignal = vcf.process(rawMix, modulatedCutoff, resonance);
+        // Passa o mix com headroom controlado pelo novo MoogLadderFilter
+        float filteredSignal = vcf.process(rawMix * 0.55f, modulatedCutoff, resonance);
         return filteredSignal * ampEnv.nextLevel();
     }
 };
@@ -328,14 +330,12 @@ private:
     std::atomic<float> filterResonance{0.35f};
     std::atomic<float> filterEnvAmount{2500.0f};
 
-    // LFO & Delay Analógico
-    std::atomic<float> lfoRate{2.5f};      // Hz (0.1 a 20 Hz)
-    std::atomic<float> lfoDepth{0.0f};     // Modulação do Cutoff em Hz (0 a 3000 Hz)
-    std::atomic<float> delayTime{0.32f};   // Segundos
+    std::atomic<float> lfoRate{2.5f};
+    std::atomic<float> lfoDepth{0.0f};
+    std::atomic<float> delayTime{0.32f};
     std::atomic<float> delayFeedback{0.4f};
     std::atomic<float> delayMix{0.2f};
 
-    // Buffer do Osciloscópio
     static const int SCOPE_SIZE = 256;
     std::array<float, SCOPE_SIZE> scopeBuffer{};
     std::atomic<int> scopeWriteIndex{0};
@@ -344,7 +344,7 @@ public:
     AudioEngine() {
         for (auto& v : voices) v.init(48000.0f);
         lfo.init(48000.0f);
-        lfo.setWaveType(2); // Onda Triangular para LFO suave
+        lfo.setWaveType(2);
         tapeDelay.init(48000.0f);
         scopeBuffer.fill(0.0f);
     }
@@ -516,7 +516,7 @@ public:
                 sampleSum += v.renderSample(oscVolumes, cutoff, res, envAmt, lfoMod);
             }
 
-            float withDelay = tapeDelay.process(sampleSum * 0.6f, dTime, dFb, dMix);
+            float withDelay = tapeDelay.process(sampleSum * 0.7f, dTime, dFb, dMix);
             float out = tanhf(withDelay * masterVol);
             outputBuffer[i] = out;
 
