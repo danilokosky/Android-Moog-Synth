@@ -504,6 +504,7 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
         }
     }
 
+
     if (showAudioSettingsDialog) {
         AlertDialog(
             onDismissRequest = { showAudioSettingsDialog = false },
@@ -512,43 +513,56 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
             titleContentColor = Color.White,
             textContentColor = Color.LightGray,
             title = {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // CORREÇÃO DA UI: A coluna com weight(1f) evita que o título expulse o botão
-                    Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Text(
-                            text = "⚙️ MOTOR DE ÁUDIO & QUALIDADE ANALÓGICA",
+                            text = "⚙️ MOTOR DE ÁUDIO & DSP",
                             color = Color(0xFFF59E0B),
-                            fontSize = 15.sp,
+                            fontSize = 14.sp,
                             fontWeight = FontWeight.ExtraBold
                         )
-                        Text(
-                            text = "Calibração Acústica Moog + Performance de Baixa Latência Oboe",
-                            color = Color(0xFF94A3B8),
-                            fontSize = 11.sp,
-                            lineHeight = 14.sp
-                        )
+                        Box(
+                            modifier = Modifier
+                                .background(Color(0xFF1E293B), RoundedCornerShape(6.dp))
+                                .border(1.dp, Color(0xFF334155), RoundedCornerShape(6.dp))
+                                .clickable {
+                                    oversamplingFactor = 2; analogDrift = 0.35f; filterDrive = 0.25f
+                                    filterKeyTrack = 0.50f; stereoSpread = 0.45f; velocitySens = 0.35f
+                                    maxPolyphony = 16; bufferBurstMult = 2; paramSmoothing = true
+                                    applyEngineSettingsToNative()
+                                    saveEngineSettingsToDisk()
+                                }
+                                .padding(horizontal = 8.dp, vertical = 6.dp)
+                        ) {
+                            Text("↺ RESET", color = Color(0xFF38BDF8), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        }
                     }
-                    Box(
-                        modifier = Modifier
-                            .background(Color(0xFF1E293B), RoundedCornerShape(6.dp))
-                            .border(1.dp, Color(0xFF334155), RoundedCornerShape(6.dp))
-                            .clickable {
-                                oversamplingFactor = 2; analogDrift = 0.35f; filterDrive = 0.25f
-                                filterKeyTrack = 0.50f; stereoSpread = 0.45f; velocitySens = 0.35f
-                                maxPolyphony = 16; bufferBurstMult = 2; paramSmoothing = true
-                                applyEngineSettingsToNative()
-                                saveEngineSettingsToDisk()
-                            }
-                            .padding(horizontal = 8.dp, vertical = 6.dp)
-                    ) {
-                        Text("↺ PADRÃO STUDIO", color = Color(0xFF38BDF8), fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Calibração Acústica Moog + Performance Oboe",
+                        color = Color(0xFF94A3B8),
+                        fontSize = 10.sp,
+                        lineHeight = 14.sp
+                    )
                 }
             },
+
+
+
+
+
+
+
+
+
+
+
+
+            
             text = {
                 Column(
                     modifier = Modifier
