@@ -29,4 +29,16 @@ class NativeAudioEngine {
     external fun setFilterADSR(a: Float, d: Float, s: Float, r: Float)
 
     external fun getWaveform(outArray: FloatArray)
+
+    // Controles do Motor Analógico Orgânico & Performance Oboe
+    external fun setOversampling(factor: Int)
+    external fun setAnalogDrift(drift: Float)
+    external fun setFilterDrive(drive: Float)
+    external fun setFilterKeyTrack(track: Float)
+    external fun setStereoSpread(spread: Float)
+    external fun setVelocitySensitivity(sens: Float)
+    external fun setMaxPolyphony(maxVoices: Int)
+    external fun setBufferBurstMultiplier(mult: Int)
+    external fun setParameterSmoothing(enabled: Boolean)
+    external fun getEngineStats(outStats: FloatArray)
 }
