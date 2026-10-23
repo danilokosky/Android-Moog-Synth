@@ -16,6 +16,10 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
@@ -201,6 +205,53 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
     var aRelease by remember { mutableStateOf(0.3f) }
     var masterNorm by remember { mutableStateOf(0.85f) }
 
+    // --- ESTADOS DA JANELA DE ÁUDIO & DSP (QUALIDADE ORGÂNICA E PERFORMANCE) ---
+    var showAudioSettingsDialog by remember { mutableStateOf(false) }
+    var oversamplingFactor by remember { mutableStateOf(2) }     // 1x, 2x, 4x
+    var analogDrift by remember { mutableStateOf(0.35f) }         // 0..1
+    var filterDrive by remember { mutableStateOf(0.25f) }         // 0..1
+    var filterKeyTrack by remember { mutableStateOf(0.50f) }      // 0..1
+    var stereoSpread by remember { mutableStateOf(0.45f) }        // 0..1
+    var velocitySens by remember { mutableStateOf(0.35f) }        // 0..1
+    var maxPolyphony by remember { mutableStateOf(16) }           // 4, 8, 12, 16
+    var bufferBurstMult by remember { mutableStateOf(2) }         // 1, 2, 4
+    var paramSmoothing by remember { mutableStateOf(true) }
+
+    // Telemetria em tempo real vinda do C++ Oboe
+    val engineStatsBuffer = remember { FloatArray(7) }
+    var statSampleRate by remember { mutableStateOf(48000) }
+    var statBurstFrames by remember { mutableStateOf(192) }
+    var statBufferFrames by remember { mutableStateOf(384) }
+    var statLatencyMs by remember { mutableStateOf(8.0f) }
+    var statXRuns by remember { mutableStateOf(0) }
+    var statActiveVoices by remember { mutableStateOf(0) }
+
+    fun saveEngineSettingsToDisk() {
+        val obj = JSONObject()
+        obj.put("oversamplingFactor", oversamplingFactor)
+        obj.put("analogDrift", analogDrift.toDouble())
+        obj.put("filterDrive", filterDrive.toDouble())
+        obj.put("filterKeyTrack", filterKeyTrack.toDouble())
+        obj.put("stereoSpread", stereoSpread.toDouble())
+        obj.put("velocitySens", velocitySens.toDouble())
+        obj.put("maxPolyphony", maxPolyphony)
+        obj.put("bufferBurstMult", bufferBurstMult)
+        obj.put("paramSmoothing", paramSmoothing)
+        prefs.edit().putString("saved_engine_dsp_settings_json", obj.toString()).apply()
+    }
+
+    fun applyEngineSettingsToNative() {
+        audioEngine.setOversampling(oversamplingFactor)
+        audioEngine.setAnalogDrift(analogDrift)
+        audioEngine.setFilterDrive(filterDrive)
+        audioEngine.setFilterKeyTrack(filterKeyTrack)
+        audioEngine.setStereoSpread(stereoSpread)
+        audioEngine.setVelocitySensitivity(velocitySens)
+        audioEngine.setMaxPolyphony(maxPolyphony)
+        audioEngine.setBufferBurstMultiplier(bufferBurstMult)
+        audioEngine.setParameterSmoothing(paramSmoothing)
+    }
+
     fun normToCutoffHz(norm: Float): Float {
         val minHz = 20f
         val maxHz = 12000f
@@ -212,7 +263,7 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
     // --- 1. GERENCIADOR DE PRESETS DE TIMBRES (COM SAVE EXPLÍCITO) ---
     val presetsList = remember { mutableStateListOf<SynthPreset>() }
     var currentPresetId by remember { mutableStateOf("") }
-    var isPresetDirty by remember { mutableStateOf(false) } // Indica se o preset atual foi alterado mas não salvo!
+    var isPresetDirty by remember { mutableStateOf(false) }
     var isPresetDropdownExpanded by remember { mutableStateOf(false) }
 
     // --- 2. GERENCIADOR DE SLOTS MIDI LEARN (AUTO-SAVE) ---
@@ -251,7 +302,6 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
         prefs.edit().putString("saved_synth_presets_v2_json", root.toString()).apply()
     }
 
-    // Função chamada APENAS quando o usuário clica explicitamente no botão "💾 SALVAR"
     fun saveCurrentStateToActivePresetExplicitly() {
         val idx = presetsList.indexOfFirst { it.id == currentPresetId }
         if (idx != -1) {
@@ -271,7 +321,6 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
         }
     }
 
-    // Carrega um Preset da lista (descartando alterações não salvas se você tiver se arrependido!)
     fun applyPresetToEngine(p: SynthPreset) {
         currentPresetId = p.id
         isPresetDirty = false
@@ -342,6 +391,26 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
 
     // Inicialização ao abrir o aplicativo
     LaunchedEffect(Unit) {
+        // Carrega configurações de Áudio & DSP salvas
+        val rawDspJson = prefs.getString("saved_engine_dsp_settings_json", null)
+        if (rawDspJson != null) {
+            try {
+                val o = JSONObject(rawDspJson)
+                oversamplingFactor = o.optInt("oversamplingFactor", 2)
+                analogDrift = o.optDouble("analogDrift", 0.35).toFloat()
+                filterDrive = o.optDouble("filterDrive", 0.25).toFloat()
+                filterKeyTrack = o.optDouble("filterKeyTrack", 0.50).toFloat()
+                stereoSpread = o.optDouble("stereoSpread", 0.45).toFloat()
+                velocitySens = o.optDouble("velocitySens", 0.35).toFloat()
+                maxPolyphony = o.optInt("maxPolyphony", 16)
+                bufferBurstMult = o.optInt("bufferBurstMult", 2)
+                paramSmoothing = o.optBoolean("paramSmoothing", true)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+        applyEngineSettingsToNative()
+
         val rawSlotsJson = prefs.getString("saved_midi_slots_json", null)
         if (rawSlotsJson != null) {
             try {
@@ -426,7 +495,6 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
     val currentSlotName = midiSlots.find { it.id == currentSlotId }?.name ?: "Slot 1"
     val currentPresetName = presetsList.find { it.id == currentPresetId }?.name ?: "Preset 1"
 
-    // Atualiza o parâmetro no motor C++ e acende o indicador de modificação (NÃO sobrescreve o Preset sem você mandar!)
     fun updateParamById(paramId: String, normVal: Float) {
         val v = normVal.coerceIn(0f, 1f)
         when (paramId) {
@@ -511,11 +579,388 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
     var frameTrigger by remember { mutableStateOf(0) }
 
     LaunchedEffect(Unit) {
+        var statsTick = 0
         while (true) {
             audioEngine.getWaveform(waveformBuffer)
             frameTrigger++
+            if (++statsTick >= 10) {
+                statsTick = 0
+                audioEngine.getEngineStats(engineStatsBuffer)
+                statSampleRate = engineStatsBuffer[0].toInt()
+                statBurstFrames = engineStatsBuffer[1].toInt()
+                statBufferFrames = engineStatsBuffer[2].toInt()
+                statLatencyMs = engineStatsBuffer[3]
+                statXRuns = engineStatsBuffer[4].toInt()
+                statActiveVoices = engineStatsBuffer[5].toInt()
+            }
             delay(16L)
         }
+    }
+
+    // --- JANELA MODAL: CONFIGURAÇÕES DE ÁUDIO, QUALIDADE ORGÂNICA & PERFORMANCE OBOE ---
+    if (showAudioSettingsDialog) {
+        AlertDialog(
+            onDismissRequest = { showAudioSettingsDialog = false },
+            containerColor = Color(0xFF14171C),
+            titleContentColor = Color.White,
+            textContentColor = Color.LightGray,
+            title = {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "⚙️ MOTOR DE ÁUDIO & QUALIDADE ANALÓGICA",
+                            color = Color(0xFFF59E0B),
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                        Text(
+                            text = "Calibração Acústica Moog + Performance de Baixa Latência Oboe",
+                            color = Color(0xFF94A3B8),
+                            fontSize = 11.sp
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .background(Color(0xFF1E293B), RoundedCornerShape(6.dp))
+                            .border(1.dp, Color(0xFF334155), RoundedCornerShape(6.dp))
+                            .clickable {
+                                oversamplingFactor = 2
+                                analogDrift = 0.35f
+                                filterDrive = 0.25f
+                                filterKeyTrack = 0.50f
+                                stereoSpread = 0.45f
+                                velocitySens = 0.35f
+                                maxPolyphony = 16
+                                bufferBurstMult = 2
+                                paramSmoothing = true
+                                applyEngineSettingsToNative()
+                                saveEngineSettingsToDisk()
+                            }
+                            .padding(horizontal = 8.dp, vertical = 5.dp)
+                    ) {
+                        Text("↺ PADRÃO STUDIO", color = Color(0xFF38BDF8), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 420.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    // Painel de Telemetria em Tempo Real
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color(0xFF0B0D10), RoundedCornerShape(8.dp))
+                            .border(1.dp, Color(0xFF1E293B), RoundedCornerShape(8.dp))
+                            .padding(10.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        TelemetryBadge("SAMPLE RATE", "${statSampleRate} Hz", Color(0xFF10B981))
+                        TelemetryBadge("DSP INTERNO", "${(statSampleRate * oversamplingFactor) / 1000} kHz (${oversamplingFactor}x)", Color(0xFFF59E0B))
+                        TelemetryBadge("LATÊNCIA OBOE", "${"%.1f".format(statLatencyMs)} ms (${statBufferFrames}f)", Color(0xFF38BDF8))
+                        TelemetryBadge("VOZES ATIVAS", "$statActiveVoices / $maxPolyphony", Color(0xFFE2E8F0))
+                        TelemetryBadge(
+                            "FALHAS (XRUNS)",
+                            "$statXRuns",
+                            if (statXRuns == 0) Color(0xFF10B981) else Color(0xFFEF4444)
+                        )
+                    }
+
+                    // SEÇÃO 1: QUALIDADE DSP & CARÁTER ANALÓGICO
+                    Text(
+                        text = "1. CARÁTER ANALÓGICO & MODELAGEM FÍSICA",
+                        color = Color(0xFFF59E0B),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    // Seletor de Oversampling
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color(0xFF1C2026), RoundedCornerShape(8.dp))
+                            .padding(10.dp)
+                    ) {
+                        Text(
+                            text = "OVERSAMPLING DO FILTRO MOOG LADDER (ANTI-ALIASING)",
+                            color = Color.White,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "Aumenta a resolução interna das saturações de transistor para eliminar aspereza digital nos agudos.",
+                            color = Color(0xFF94A3B8),
+                            fontSize = 10.sp
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            val osOptions = listOf(
+                                1 to "1x (Eco / Leve)",
+                                2 to "2x (Studio HD)",
+                                4 to "4x (Ultra Analog)"
+                            )
+                            osOptions.forEach { (factor, title) ->
+                                val selected = (oversamplingFactor == factor)
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .background(
+                                            if (selected) Color(0xFFF59E0B) else Color(0xFF0F1115),
+                                            RoundedCornerShape(6.dp)
+                                        )
+                                        .border(
+                                            1.dp,
+                                            if (selected) Color(0xFFFDE047) else Color(0xFF334155),
+                                            RoundedCornerShape(6.dp)
+                                        )
+                                        .clickable {
+                                            oversamplingFactor = factor
+                                            audioEngine.setOversampling(factor)
+                                            saveEngineSettingsToDisk()
+                                        }
+                                        .padding(vertical = 8.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = title,
+                                        color = if (selected) Color.Black else Color.LightGray,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Sliders de Modelagem Orgânica
+                    DspSliderRow(
+                        title = "ANALOG DRIFT (INSTABILIDADE TÉRMICA VCO/VCF)",
+                        subtitle = "Micro-flutuações orgânicas de afinação e fase livre entre as vozes",
+                        value = analogDrift,
+                        valueLabel = "${(analogDrift * 100).toInt()}%",
+                        onValueChange = {
+                            analogDrift = it
+                            audioEngine.setAnalogDrift(it)
+                            saveEngineSettingsToDisk()
+                        }
+                    )
+
+                    DspSliderRow(
+                        title = "FILTER DRIVE (SATURAÇÃO DOS TRANSISTORES)",
+                        subtitle = "Calor harmônico e compressão natural na entrada do filtro Moog 24dB",
+                        value = filterDrive,
+                        valueLabel = "${(filterDrive * 100).toInt()}%",
+                        onValueChange = {
+                            filterDrive = it
+                            audioEngine.setFilterDrive(it)
+                            saveEngineSettingsToDisk()
+                        }
+                    )
+
+                    DspSliderRow(
+                        title = "KEYBOARD TRACKING DO FILTRO (1V/OCT)",
+                        subtitle = "Faz o ponto de corte do filtro acompanhar as notas mais agudas do teclado",
+                        value = filterKeyTrack,
+                        valueLabel = "${(filterKeyTrack * 100).toInt()}%",
+                        onValueChange = {
+                            filterKeyTrack = it
+                            audioEngine.setFilterKeyTrack(it)
+                            saveEngineSettingsToDisk()
+                        }
+                    )
+
+                    DspSliderRow(
+                        title = "ABERTURA ESTÉREO & TAPE WOW/FLUTTER",
+                        subtitle = "Espacialização estéreo entre vozes e modulação mecânica de fita no Delay",
+                        value = stereoSpread,
+                        valueLabel = "${(stereoSpread * 100).toInt()}%",
+                        onValueChange = {
+                            stereoSpread = it
+                            audioEngine.setStereoSpread(it)
+                            saveEngineSettingsToDisk()
+                        }
+                    )
+
+                    DspSliderRow(
+                        title = "SENSIBILIDADE AO VELOCITY MIDI",
+                        subtitle = "Controla o quanto a força nas teclas afeta o volume e o brilho do filtro",
+                        value = velocitySens,
+                        valueLabel = "${(velocitySens * 100).toInt()}%",
+                        onValueChange = {
+                            velocitySens = it
+                            audioEngine.setVelocitySensitivity(it)
+                            saveEngineSettingsToDisk()
+                        }
+                    )
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    // SEÇÃO 2: PERFORMANCE & HARDWARE OBOE
+                    Text(
+                        text = "2. PERFORMANCE DE HARDWARE & BUFFER OBOE",
+                        color = Color(0xFF38BDF8),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    // Seletor de Buffer / Latência
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color(0xFF1C2026), RoundedCornerShape(8.dp))
+                            .padding(10.dp)
+                    ) {
+                        Text(
+                            text = "PERFIL DE BUFFER DE ÁUDIO (LATÊNCIA VS. ESTABILIDADE)",
+                            color = Color.White,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "Se ouvir estalos (XRuns) ao usar 4x Oversampling no DeX, escolha Equilibrado ou Estável.",
+                            color = Color(0xFF94A3B8),
+                            fontSize = 10.sp
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            val bufOptions = listOf(
+                                1 to "Ultra-Baixa (1x Burst)",
+                                2 to "Equilibrada (2x Burst)",
+                                4 to "Estável (4x Burst)"
+                            )
+                            bufOptions.forEach { (mult, label) ->
+                                val selected = (bufferBurstMult == mult)
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .background(
+                                            if (selected) Color(0xFF0284C7) else Color(0xFF0F1115),
+                                            RoundedCornerShape(6.dp)
+                                        )
+                                        .border(
+                                            1.dp,
+                                            if (selected) Color(0xFF7DD3FC) else Color(0xFF334155),
+                                            RoundedCornerShape(6.dp)
+                                        )
+                                        .clickable {
+                                            bufferBurstMult = mult
+                                            audioEngine.setBufferBurstMultiplier(mult)
+                                            saveEngineSettingsToDisk()
+                                        }
+                                        .padding(vertical = 8.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = label,
+                                        color = Color.White,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Seletor de Limite de Polifonia
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color(0xFF1C2026), RoundedCornerShape(8.dp))
+                            .padding(10.dp)
+                    ) {
+                        Text(
+                            text = "LIMITE DE POLIFONIA (VOZES SIMULTÂNEAS)",
+                            color = Color.White,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            listOf(4, 8, 12, 16).forEach { voicesCount ->
+                                val selected = (maxPolyphony == voicesCount)
+                                val label = if (voicesCount == 4) "4 (Poly-D Real)" else "$voicesCount Vozes"
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .background(
+                                            if (selected) Color(0xFF0284C7) else Color(0xFF0F1115),
+                                            RoundedCornerShape(6.dp)
+                                        )
+                                        .border(
+                                            1.dp,
+                                            if (selected) Color(0xFF7DD3FC) else Color(0xFF334155),
+                                            RoundedCornerShape(6.dp)
+                                        )
+                                        .clickable {
+                                            maxPolyphony = voicesCount
+                                            audioEngine.setMaxPolyphony(voicesCount)
+                                            saveEngineSettingsToDisk()
+                                        }
+                                        .padding(vertical = 8.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = label,
+                                        color = Color.White,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Switch de Suavização Anti-Zipper
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color(0xFF1C2026), RoundedCornerShape(8.dp))
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "SUAVIZAÇÃO ANALÓGICA DE KNOBS (ANTI-ZIPPER)",
+                                color = Color.White,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "Elimina degraus digitais ao girar o Cutoff rapidamente via controlador MIDI CC.",
+                                color = Color(0xFF94A3B8),
+                                fontSize = 10.sp
+                            )
+                        }
+                        Switch(
+                            checked = paramSmoothing,
+                            onCheckedChange = {
+                                paramSmoothing = it
+                                audioEngine.setParameterSmoothing(it)
+                                saveEngineSettingsToDisk()
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color(0xFFF59E0B),
+                                checkedTrackColor = Color(0xFF78350F)
+                            )
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showAudioSettingsDialog = false }) {
+                    Text("FECHAR PAINEL", color = Color(0xFFF59E0B), fontWeight = FontWeight.ExtraBold)
+                }
+            }
+        )
     }
 
     if (showNameDialog) {
@@ -648,7 +1093,7 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
                     } else if (isPresetDirty) {
                         "TIMBRE EDITADO (Não Salvo) | Clique em SALVAR ou recarregue na lista"
                     } else {
-                        "TIMBRE: $currentPresetName | MIDI: $currentSlotName"
+                        "TIMBRE: $currentPresetName | DSP: ${oversamplingFactor}x OS • ${"%.1f".format(statLatencyMs)}ms"
                     },
                     color = if (isMidiLearnMode || isPresetDirty) Color(0xFFFBBF24) else Color(0xFF94A3B8),
                     fontSize = 10.sp,
@@ -664,6 +1109,22 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                // --- BOTÃO DO NOVO SUBMENU: ÁUDIO & DSP ---
+                Box(
+                    modifier = Modifier
+                        .background(Color(0xFF181B20), RoundedCornerShape(6.dp))
+                        .border(1.dp, Color(0xFF10B981).copy(alpha = 0.7f), RoundedCornerShape(6.dp))
+                        .clickable { showAudioSettingsDialog = true }
+                        .padding(horizontal = 11.dp, vertical = 8.dp)
+                ) {
+                    Text(
+                        text = "⚙️ ÁUDIO & DSP (${oversamplingFactor}x)",
+                        color = Color(0xFF10B981),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                }
+
                 // --- 1. SELETOR DE PRESETS + BOTÃO EXPLÍCITO "SALVAR" ---
                 Box {
                     Row(
@@ -676,7 +1137,6 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
                                 RoundedCornerShape(6.dp)
                             )
                     ) {
-                        // Abre lista de Presets
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
@@ -695,7 +1155,6 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
 
                         Box(modifier = Modifier.width(1.dp).height(22.dp).background(Color(0xFF334155)))
 
-                        // BOTÃO EXPLÍCITO DE SAVE EM CIMA DO PRESET ATUAL
                         Box(
                             modifier = Modifier
                                 .background(if (isPresetDirty) Color(0xFFD97706) else Color.Transparent)
@@ -713,7 +1172,6 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
 
                         Box(modifier = Modifier.width(1.dp).height(22.dp).background(Color(0xFF334155)))
 
-                        // Botão para Renomear o Preset Atual
                         Box(
                             modifier = Modifier
                                 .clickable {
@@ -785,7 +1243,6 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
                                     }
                                 },
                                 onClick = {
-                                    // Clicar no preset (mesmo no atual) recarrega os valores salvos e desfaz edições indesejadas!
                                     applyPresetToEngine(preset)
                                     isPresetDropdownExpanded = false
                                 }
@@ -1056,10 +1513,10 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
                 Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
                     SmartKnob("CUTOFF", "CORTE", "${normToCutoffHz(cutoffNorm).toInt()} Hz", cutoffNorm)
                     SmartKnob("RESONANCE", "RESSON.", "${(resNorm * 100).toInt()}%", resNorm)
-                    SmartKnob("ENV_AMT", "ENV AMT", "${(envAmtNorm * 5000).toInt()} Hz", envAmtNorm)
+                    SmartKnob("ENV_AMT", "ENV AMT", "${"%.1f".format(envAmtNorm * 4.8f)} Oct", envAmtNorm)
                 }
                 Spacer(modifier = Modifier.height(18.dp))
-                Text("ENVELOPE DO FILTRO (ADSR)", color = Color(0xFF94A3B8), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Text("ENVELOPE RC EXPONENCIAL (ADSR)", color = Color(0xFF94A3B8), fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(10.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                     SmartKnob("F_ATK", "ATK", "${(fAttack * 2000).toInt()}ms", fAttack)
@@ -1071,14 +1528,14 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
 
             // --- MÓDULO 3: LFO & TAPE DELAY ---
             ModuleBox(title = "MODULAÇÃO (LFO) & DELAY") {
-                Text("LFO -> FILTRO MOOG", color = Color(0xFF94A3B8), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Text("LFO -> FILTRO MOOG (1V/OCT)", color = Color(0xFF94A3B8), fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(10.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(22.dp)) {
                     SmartKnob("LFO_RATE", "LFO RATE", "${"%.1f".format(0.1f + lfoRateNorm * 19.9f)} Hz", lfoRateNorm)
                     SmartKnob("LFO_DEPTH", "LFO DEPTH", "${(lfoDepthNorm * 100).toInt()}%", lfoDepthNorm)
                 }
                 Spacer(modifier = Modifier.height(18.dp))
-                Text("TAPE DELAY ANALÓGICO", color = Color(0xFF94A3B8), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Text("STEREO TAPE DELAY (WOW & FLUTTER)", color = Color(0xFF94A3B8), fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(10.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                     SmartKnob("DELAY_TIME", "TIME", "${((0.05f + delayTimeNorm * 0.95f) * 1000).toInt()}ms", delayTimeNorm)
@@ -1089,7 +1546,7 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
 
             // --- MÓDULO 4: AMPLIFICADOR (VCA) & SAÍDA ---
             ModuleBox(title = "AMPLIFICADOR (VCA) & SAÍDA") {
-                Text("ENVELOPE DE VOLUME (ADSR)", color = Color(0xFF94A3B8), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Text("ENVELOPE DE VOLUME RC (ADSR)", color = Color(0xFF94A3B8), fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(10.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                     SmartKnob("A_ATK", "ATK", "${(aAttack * 2000).toInt()}ms", aAttack)
@@ -1101,6 +1558,51 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
                 SmartKnob("MASTER", "VOLUME MASTER", "${(masterNorm * 100).toInt()}%", masterNorm)
             }
         }
+    }
+}
+
+@Composable
+fun TelemetryBadge(label: String, value: String, valueColor: Color) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(text = label, color = Color(0xFF64748B), fontSize = 8.sp, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(text = value, color = valueColor, fontSize = 11.sp, fontWeight = FontWeight.ExtraBold)
+    }
+}
+
+@Composable
+fun DspSliderRow(
+    title: String,
+    subtitle: String,
+    value: Float,
+    valueLabel: String,
+    onValueChange: (Float) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color(0xFF1C2026), RoundedCornerShape(8.dp))
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(text = title, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            Text(text = valueLabel, color = Color(0xFFF59E0B), fontSize = 11.sp, fontWeight = FontWeight.ExtraBold)
+        }
+        Text(text = subtitle, color = Color(0xFF94A3B8), fontSize = 9.sp)
+        Slider(
+            value = value,
+            onValueChange = onValueChange,
+            valueRange = 0f..1f,
+            colors = SliderDefaults.colors(
+                thumbColor = Color(0xFFF59E0B),
+                activeTrackColor = Color(0xFFF59E0B),
+                inactiveTrackColor = Color(0xFF0F1115)
+            )
+        )
     }
 }
 
