@@ -30,12 +30,13 @@ static inline float transparentMasterLimiter(float x) {
     return sign * (threshold + (1.0f - threshold) * fastTanh(excess));
 }
 
-// Bloqueador de DC Master ultra-transparente (2Hz)
+// Bloqueador de DC ultra-transparente (2Hz)
 class DCBlocker {
 private:
     float x1 = 0.0f;
     float y1 = 0.0f;
 public:
+    void clear() { x1 = 0.0f; y1 = 0.0f; }
     float process(float x) {
         float y = x - x1 + 0.9996f * y1;
         x1 = x;
@@ -187,7 +188,7 @@ public:
 };
 
 // --- FILTRO MOOG LADDER 24dB TPT (ZERO-DELAY FEEDBACK) ---
-// Preserva 100% da dinâmica da onda, brilho cristalino até 18kHz e peso real nos graves
+// Dedicado individualmente para cada canal de oscilador (Zero Intermodulação entre Osciladores)
 class MoogLadderFilter {
 private:
     float sampleRate = 48000.0f;
@@ -209,8 +210,7 @@ public:
         int os = std::clamp(oversampleFactor, 1, 4);
         float effSr = sampleRate * static_cast<float>(os);
 
-        // Compensação do ponto de -3dB de 4 polos em cascata (1 / 0.643 = ~1.55x)
-        // Isso garante que o filtro não abafe os médios-agudos prematuramente!
+        // Compensação do ponto de -3dB de 4 polos em cascata
         float fc = std::clamp(cutoffHz * 1.35f, 22.0f, sampleRate * 0.45f);
 
         // Integrador Trapezoidal (TPT)
@@ -224,11 +224,8 @@ public:
         float resShaped = powf(resNorm, 1.35f);
         float k = resShaped * 3.82f;
 
-        // Compensação matemática exata da perda de graves do feedback negativo Ladder:
-        // No filtro Ladder, o ganho DC cai por (1 + k). Compensamos para que o grave nunca perca o peso!
+        // Compensação exata da perda de graves do feedback negativo Ladder
         float bassGainComp = 1.0f + (k * 0.42f);
-
-        // Drive só satura quando o usuário realmente sobe o parâmetro Filter Drive
         float driveGain = 1.0f + (driveNorm * 1.4f);
 
         float out = 0.0f;
@@ -241,11 +238,11 @@ public:
                 x = fastTanh(x) / driveGain;
             }
 
-            // Solução instantânea de Zero-Delay Feedback (sem atraso de 1 sample no loop!)
+            // Solução instantânea de Zero-Delay Feedback
             float S = (G3 * s[0]) + (G2 * s[1]) + (G * s[2]) + s[3];
             float u = (x - k * fastTanh(S)) / (1.0f + k * G4);
 
-            // 4 estágios trapezoidais lineares de alta definição (não achatam a onda!)
+            // 4 estágios trapezoidais lineares de alta definição
             float v0 = (u - s[0]) * G;
             float y0 = v0 + s[0];
             s[0] = y0 + v0;
@@ -270,7 +267,7 @@ public:
     }
 };
 
-// --- DELAY ANALÓGICO ESTÉREO ---
+// --- DELAY ANALÓGICO ESTÉREO DEDICADO POR CANAL DE OSCILADOR ---
 class AnalogDelay {
 private:
     std::vector<float> bufferL;
@@ -280,6 +277,8 @@ private:
     float lpStateL = 0.0f, lpStateR = 0.0f;
     float hpStateL = 0.0f, hpStateR = 0.0f;
     float wowPhase = 0.0f, flutterPhase = 0.0f;
+    float wowRateHz = 0.55f;
+    float flutterRateHz = 5.8f;
 
     float readFractional(const std::vector<float>& buf, float delaySamples) const {
         int size = static_cast<int>(buf.size());
@@ -292,12 +291,17 @@ private:
     }
 
 public:
-    void init(float sr) {
+    void init(float sr, int channelIdx = 0) {
         sampleRate = sr;
         size_t maxSamples = static_cast<size_t>(sr * 1.6f);
         bufferL.assign(maxSamples, 0.0f);
         bufferR.assign(maxSamples, 0.0f);
         writeIdx = 0;
+        // Cada canal de fita tem sua própria micro-característica mecânica de Wow/Flutter e fase inicial
+        wowPhase = static_cast<float>(channelIdx) * 0.33f;
+        flutterPhase = static_cast<float>(channelIdx) * 0.47f;
+        wowRateHz = 0.52f + (static_cast<float>(channelIdx) * 0.04f);
+        flutterRateHz = 5.6f + (static_cast<float>(channelIdx) * 0.25f);
         clear();
     }
 
@@ -312,9 +316,9 @@ public:
             outL = inL; outR = inR; return;
         }
 
-        wowPhase += 0.55f / sampleRate;
+        wowPhase += wowRateHz / sampleRate;
         if (wowPhase >= 1.0f) wowPhase -= 1.0f;
-        flutterPhase += 5.8f / sampleRate;
+        flutterPhase += flutterRateHz / sampleRate;
         if (flutterPhase >= 1.0f) flutterPhase -= 1.0f;
 
         float tapeModSec = (sinf(2.0f * static_cast<float>(M_PI) * wowPhase) * 0.0007f) +
@@ -346,22 +350,20 @@ public:
         bufferR[writeIdx] = fastTanh(inR + fbSignalR * fb);
         writeIdx = (writeIdx + 1) % static_cast<int>(bufferL.size());
 
-        // Aditivo: mantém o sinal Dry 100% íntegro e profundo!
+        // Aditivo: mantém o sinal Dry do canal 100% íntegro
         outL = inL + (lpStateL * mix * 0.85f);
         outR = inR + (lpStateR * mix * 0.85f);
     }
 };
 
-// --- VOZ POLIFÔNICA DE ALTA PROFUNDIDADE ---
+// --- VOZ POLIFÔNICA COM 3 CANAIS DE OSCILADOR/FILTRO ISOLADOS ---
 class Voice {
 private:
     Oscillator osc[3];
+    MoogLadderFilter vcf[3];          // 1 Filtro Moog TPT exclusivo para cada Oscilador!
+    float bassShelfState[3] = {0.0f, 0.0f, 0.0f}; // Contorno Sub-Bass independente por canal
     Envelope ampEnv;
     Envelope filterEnv;
-    MoogLadderFilter vcf;
-
-    // Filtro one-pole para encorpar o sub-grave nas notas baixas (Low-End Shelf)
-    float bassShelfState = 0.0f;
     float sampleRate = 48000.0f;
 
     int currentNote = -1;
@@ -371,7 +373,7 @@ private:
     int driftCounter = 0;
     float oscDriftSt[3] = {0.0f, 0.0f, 0.0f};
     float oscStaticCalibrationSt[3] = {0.0f, 0.0f, 0.0f};
-    float filterCutoffCalibration = 1.0f;
+    float filterCutoffCalibration[3] = {1.0f, 1.0f, 1.0f};
 
     float nextWhiteNoise() {
         rngState = rngState * 1664525u + 1013904223u;
@@ -382,33 +384,41 @@ public:
     void init(float sr, int idx) {
         sampleRate = sr;
         rngState = 13579u + static_cast<uint32_t>(idx * 98765u);
-        for (int i = 0; i < 3; ++i) {
+        for (int c = 0; c < 3; ++c) {
             float initPhase = (nextWhiteNoise() + 1.0f) * 0.5f;
-            osc[i].init(sr, initPhase);
-            oscStaticCalibrationSt[i] = nextWhiteNoise() * 0.035f;
-            oscDriftSt[i] = 0.0f;
+            osc[c].init(sr, initPhase);
+            oscStaticCalibrationSt[c] = nextWhiteNoise() * 0.035f;
+            oscDriftSt[c] = 0.0f;
+            filterCutoffCalibration[c] = 1.0f + (nextWhiteNoise() * 0.022f);
+            vcf[c].init(sr);
+            bassShelfState[c] = 0.0f;
         }
-        filterCutoffCalibration = 1.0f + (nextWhiteNoise() * 0.02f);
-        osc[0].setWaveType(0); osc[1].setWaveType(1); osc[2].setWaveType(2);
-        ampEnv.init(sr); ampEnv.setADSR(0.01f, 0.3f, 0.7f, 0.3f);
-        filterEnv.init(sr); filterEnv.setADSR(0.01f, 0.25f, 0.2f, 0.3f);
-        vcf.init(sr);
-        bassShelfState = 0.0f;
+        osc[0].setWaveType(0);
+        osc[1].setWaveType(1);
+        osc[2].setWaveType(2);
+
+        ampEnv.init(sr);
+        ampEnv.setADSR(0.01f, 0.3f, 0.7f, 0.3f);
+
+        filterEnv.init(sr);
+        filterEnv.setADSR(0.01f, 0.25f, 0.2f, 0.3f);
     }
 
     void updateFrequencies(const float* oscTunes, float driftAmount) {
         if (currentNote < 0) return;
-        for (int i = 0; i < 3; ++i) {
-            float totalDetuneSt = oscTunes[i] + (oscStaticCalibrationSt[i] + oscDriftSt[i]) * driftAmount;
+        for (int c = 0; c < 3; ++c) {
+            float totalDetuneSt = oscTunes[c] + (oscStaticCalibrationSt[c] + oscDriftSt[c]) * driftAmount;
             float freq = 440.0f * exp2f((static_cast<float>(currentNote) + totalDetuneSt - 69.0f) / 12.0f);
-            osc[i].setFrequency(freq);
+            osc[c].setFrequency(freq);
         }
     }
 
     void noteOn(int note, int velocity, const float* oscTunes, float driftAmount, uint64_t noteAge) {
         if (ampEnv.isIdle()) {
-            vcf.reset();
-            bassShelfState = 0.0f;
+            for (int c = 0; c < 3; ++c) {
+                vcf[c].reset();
+                bassShelfState[c] = 0.0f;
+            }
         }
         currentNote = note;
         noteVelocity = std::clamp(static_cast<float>(velocity) / 127.0f, 0.05f, 1.0f);
@@ -419,14 +429,25 @@ public:
     }
 
     void noteOff(int note) {
-        if (currentNote == note) { ampEnv.triggerOff(); filterEnv.triggerOff(); }
+        if (currentNote == note) {
+            ampEnv.triggerOff();
+            filterEnv.triggerOff();
+        }
     }
 
     void kill() {
-        currentNote = -1; ampEnv.kill(); filterEnv.kill(); vcf.reset(); bassShelfState = 0.0f;
+        currentNote = -1;
+        ampEnv.kill();
+        filterEnv.kill();
+        for (int c = 0; c < 3; ++c) {
+            vcf[c].reset();
+            bassShelfState[c] = 0.0f;
+        }
     }
 
-    void setWaveType(int index, int type) { if (index >= 0 && index < 3) osc[index].setWaveType(type); }
+    void setWaveType(int index, int type) {
+        if (index >= 0 && index < 3) osc[index].setWaveType(type);
+    }
     void setAmpADSR(float a, float d, float s, float r) { ampEnv.setADSR(a, d, s, r); }
     void setFilterADSR(float a, float d, float s, float r) { filterEnv.setADSR(a, d, s, r); }
     bool isActive() const { return !ampEnv.isIdle(); }
@@ -434,61 +455,97 @@ public:
     int getNote() const { return currentNote; }
     uint64_t getAge() const { return age; }
 
-    float renderSample(const float* oscVols, const float* oscTunes, float baseCutoff, float resonance, float filterEnvAmtHz, float lfoModOctaves, float driftAmount, float driveNorm, float keyTrackAmount, float velSensAmount, int oversampleFactor) {
-        if (ampEnv.isIdle()) return 0.0f;
+    // Renderiza os 3 canais de Oscilador de forma 100% SEPARADA E ISOLADA
+    void renderChannels(
+        const float* oscVols,
+        const float* oscTunes,
+        float baseCutoff,
+        float resonance,
+        float filterEnvAmtHz,
+        const float* lfoModOctavesPerCh,
+        float driftAmount,
+        float driveNorm,
+        float keyTrackAmount,
+        float velSensAmount,
+        int oversampleFactor,
+        float* outCh // Array de saída para os 3 canais independentes: outCh[0], outCh[1], outCh[2]
+    ) {
+        if (ampEnv.isIdle()) {
+            outCh[0] = 0.0f;
+            outCh[1] = 0.0f;
+            outCh[2] = 0.0f;
+            return;
+        }
 
         if ((++driftCounter & 63) == 0) {
-            for (int i = 0; i < 3; ++i) {
-                oscDriftSt[i] = (oscDriftSt[i] * 0.996f) + (nextWhiteNoise() * 0.004f);
-                oscDriftSt[i] = std::clamp(oscDriftSt[i], -0.12f, 0.12f);
+            for (int c = 0; c < 3; ++c) {
+                oscDriftSt[c] = (oscDriftSt[c] * 0.996f) + (nextWhiteNoise() * 0.004f);
+                oscDriftSt[c] = std::clamp(oscDriftSt[c], -0.12f, 0.12f);
             }
             updateFrequencies(oscTunes, driftAmount);
         }
 
-        float rawMix = (osc[0].nextSample() * oscVols[0]) +
-                       (osc[1].nextSample() * oscVols[1]) +
-                       (osc[2].nextSample() * oscVols[2]);
-
         float fEnvVal = filterEnv.nextLevel();
+        float aEnvVal = ampEnv.nextLevel();
+
         float velFactor = (1.0f - velSensAmount) + (noteVelocity * velSensAmount);
         float velFilterBoost = (1.0f - velSensAmount * 0.5f) + (noteVelocity * velSensAmount * 0.5f);
-
         float envOctaves = (filterEnvAmtHz / 5000.0f) * 4.5f * fEnvVal * velFilterBoost;
 
-        // Nas notas graves (< MIDI 60), o Key Tracking é suavizado (apenas 25%) para NUNCA fechar
-        // o filtro nas notas baixas, enquanto nas notas agudas (> 60) ele abre 100% para dar brilho!
-        float noteOffset = static_cast<float>(currentNote) - 60.0f;
-        float keyTrackOctaves = (noteOffset >= 0.0f)
-            ? ((noteOffset / 12.0f) * keyTrackAmount)
-            : ((noteOffset / 12.0f) * keyTrackAmount * 0.25f);
-
-        float totalOctaves = envOctaves + lfoModOctaves + keyTrackOctaves;
-        float voiceDriftFactor = 1.0f + ((filterCutoffCalibration - 1.0f) * driftAmount);
-        float modulatedCutoff = baseCutoff * voiceDriftFactor * exp2f(totalOctaves);
-
-        // Passa pelo novo Filtro Moog TPT linear sem esmagar os picos da onda
-        float filteredSignal = vcf.process(rawMix * 0.50f, modulatedCutoff, resonance, driveNorm, oversampleFactor);
-
-        // CONTORNO SUB-BASS MOOG: Dá peso, corpo e presença às notas graves (< C4)
-        float lowNoteWeight = std::clamp((64.0f - static_cast<float>(currentNote)) / 28.0f, 0.0f, 1.0f);
+        float vcaGain = aEnvVal * velFactor;
         float shelfAlpha = std::clamp(1100.0f / sampleRate, 0.001f, 0.2f);
-        bassShelfState += shelfAlpha * (filteredSignal - bassShelfState);
-        float fullBodySignal = filteredSignal + (bassShelfState * lowNoteWeight * 0.65f);
 
-        // Saída do VCA 100% linear
-        return fullBodySignal * ampEnv.nextLevel() * velFactor;
+        // Processa cada Oscilador no seu próprio Canal Exclusivo (OSC c -> VCF c -> Shelf c -> Out c)
+        for (int c = 0; c < 3; ++c) {
+            float vol = oscVols[c];
+            if (vol <= 0.0005f) {
+                // Mantém a fase do oscilador rodando mesmo em silêncio, mas poupa CPU do filtro
+                osc[c].nextSample();
+                outCh[c] = 0.0f;
+                continue;
+            }
+
+            float rawOsc = osc[c].nextSample() * vol;
+
+            // A nota efetiva deste canal considera a própria afinação do oscilador (oscTunes[c]):
+            // Se o OSC 2 está em -12st e o OSC 3 em +7st, cada filtro acompanha a janela harmônica do seu oscilador!
+            float effectiveNote = static_cast<float>(currentNote) + (oscTunes[c] * 0.35f);
+            float noteOffset = effectiveNote - 60.0f;
+            float keyTrackOctaves = (noteOffset >= 0.0f)
+                ? ((noteOffset / 12.0f) * keyTrackAmount)
+                : ((noteOffset / 12.0f) * keyTrackAmount * 0.25f);
+
+            float chOctaves = envOctaves + lfoModOctavesPerCh[c] + keyTrackOctaves;
+            float chDriftFactor = 1.0f + ((filterCutoffCalibration[c] - 1.0f) * driftAmount);
+            float chCutoff = baseCutoff * chDriftFactor * exp2f(chOctaves);
+
+            // Filtra este oscilador isoladamente (sem colidir com os outros 2 osciladores!)
+            float filteredCh = vcf[c].process(rawOsc * 0.55f, chCutoff, resonance, driveNorm, oversampleFactor);
+
+            // Contorno Sub-Bass calculado especificamente para a altura real deste oscilador
+            float chEffectivePitch = static_cast<float>(currentNote) + oscTunes[c];
+            float lowNoteWeight = std::clamp((64.0f - chEffectivePitch) / 28.0f, 0.0f, 1.0f);
+            bassShelfState[c] += shelfAlpha * (filteredCh - bassShelfState[c]);
+            float fullBodyCh = filteredCh + (bassShelfState[c] * lowNoteWeight * 0.60f);
+
+            outCh[c] = fullBodyCh * vcaGain;
+        }
     }
 };
 
-// --- MOTOR OBOE ---
+// --- MOTOR OBOE COM ARQUITETURA TRIPLE-CHANNEL ISOLATED ---
 class AudioEngine : public oboe::AudioStreamDataCallback, public oboe::AudioStreamErrorCallback {
 private:
     std::shared_ptr<oboe::AudioStream> stream;
     static const int MAX_VOICES = 16;
     std::array<Voice, MAX_VOICES> voices;
-    Oscillator lfo;
-    AnalogDelay tapeDelay;
-    DCBlocker dcBlockerL, dcBlockerR;
+
+    // 3 Canais Independentes de LFO, Tape Delay e DC Blocker (1 para cada Oscilador!)
+    Oscillator lfo[3];
+    AnalogDelay tapeDelay[3];
+    DCBlocker dcBlockerL[3];
+    DCBlocker dcBlockerR[3];
+
     std::mutex voiceMutex;
     uint64_t voiceCounter = 0;
 
@@ -517,7 +574,11 @@ private:
 public:
     AudioEngine() {
         for (int i = 0; i < MAX_VOICES; ++i) voices[i].init(48000.0f, i);
-        lfo.init(48000.0f); lfo.setWaveType(2); tapeDelay.init(48000.0f);
+        for (int c = 0; c < 3; ++c) {
+            lfo[c].init(48000.0f, static_cast<float>(c) * 0.12f);
+            lfo[c].setWaveType(2);
+            tapeDelay[c].init(48000.0f, c);
+        }
         scopeBuffer.fill(0.0f);
     }
 
@@ -536,7 +597,13 @@ public:
         if (result == oboe::Result::OK) {
             float actualSr = static_cast<float>(stream->getSampleRate());
             for (int i = 0; i < MAX_VOICES; ++i) voices[i].init(actualSr, i);
-            lfo.init(actualSr); tapeDelay.init(actualSr);
+            for (int c = 0; c < 3; ++c) {
+                lfo[c].init(actualSr, static_cast<float>(c) * 0.12f);
+                lfo[c].setWaveType(2);
+                tapeDelay[c].init(actualSr, c);
+                dcBlockerL[c].clear();
+                dcBlockerR[c].clear();
+            }
             int32_t burst = stream->getFramesPerBurst();
             int mult = std::clamp(bufferBurstMult.load(), 1, 8);
             if (burst > 0) stream->setBufferSizeInFrames(burst * mult);
@@ -584,7 +651,16 @@ public:
         std::lock_guard<std::mutex> lock(voiceMutex);
         for (auto& v : voices) { if (v.isActive() && v.getNote() == note) v.noteOff(note); }
     }
-    void allNotesOff() { std::lock_guard<std::mutex> lock(voiceMutex); for (auto& v : voices) v.kill(); tapeDelay.clear(); }
+
+    void allNotesOff() {
+        std::lock_guard<std::mutex> lock(voiceMutex);
+        for (auto& v : voices) v.kill();
+        for (int c = 0; c < 3; ++c) {
+            tapeDelay[c].clear();
+            dcBlockerL[c].clear();
+            dcBlockerR[c].clear();
+        }
+    }
 
     void setOscVolume(int index, float vol) { std::lock_guard<std::mutex> lock(voiceMutex); if (index >= 0 && index < 3) oscVolumes[index] = std::clamp(vol, 0.0f, 1.0f); }
     void setOscTune(int index, float semitones) { std::lock_guard<std::mutex> lock(voiceMutex); if (index >= 0 && index < 3) { oscTunes[index] = semitones; float drift = analogDrift.load(); for (auto& v : voices) { if (v.isActive()) v.updateFrequencies(oscTunes, drift); } } }
@@ -640,7 +716,11 @@ public:
         std::unique_lock<std::mutex> lock(voiceMutex, std::try_to_lock);
         if (!lock.owns_lock()) { std::fill(outputBuffer, outputBuffer + (numFrames * 2), 0.0f); return oboe::DataCallbackResult::Continue; }
 
-        lfo.setFrequency(currentLfoRate);
+        // Cada canal de oscilador tem seu próprio gerador LFO com micro-desvio orgânico
+        lfo[0].setFrequency(currentLfoRate);
+        lfo[1].setFrequency(currentLfoRate * (1.0f + drift * 0.015f));
+        lfo[2].setFrequency(currentLfoRate * (1.0f - drift * 0.015f));
+
         int wIdx = scopeWriteIndex.load();
         float lfoDepthOctaves = (currentLfoDepthHz / 3000.0f) * 2.2f;
         float smoothCoeff = useSmoothing ? 0.0045f : 1.0f;
@@ -649,10 +729,11 @@ public:
         for (int vIdx = 0; vIdx < polyLimit; ++vIdx) if (voices[vIdx].isActive()) currentlyActive++;
         activeVoiceCount.store(currentlyActive);
 
-        // GANHO FIXO ESTÁVEL (0.42f):
-        // Nunca varia quando notas entram ou saem do Release -> Elimina 100% o "soquinho"
-        // e nunca esmaga o grave quando você toca acordes!
+        // Headroom fixo por canal (sem compressor variável para nunca dar "soquinho")
         const float fixedVoiceHeadroom = 0.42f;
+
+        // Bias estéreo sutil por Canal de Oscilador (OSC 1 ancorado no centro, OSC 2 levemente L, OSC 3 levemente R)
+        const float chStereoBias[3] = {0.0f, -0.22f, 0.22f};
 
         for (int i = 0; i < numFrames; ++i) {
             smoothCutoff += smoothCoeff * (targetCutoff - smoothCutoff);
@@ -660,32 +741,66 @@ public:
             smoothMaster += smoothCoeff * (targetMaster - smoothMaster);
             smoothDelayTime += 0.0008f * (targetDTime - smoothDelayTime);
 
-            float lfoModOct = lfo.nextSample() * lfoDepthOctaves;
-            float sumL = 0.0f, sumR = 0.0f;
+            // 3 modulações de LFO independentes (uma para cada canal de oscilador)
+            float lfoModOct[3] = {
+                lfo[0].nextSample() * lfoDepthOctaves,
+                lfo[1].nextSample() * lfoDepthOctaves,
+                lfo[2].nextSample() * lfoDepthOctaves
+            };
+
+            // 3 Barramentos Estéreo completamente separados (Canal 1 = OSC 1, Canal 2 = OSC 2, Canal 3 = OSC 3)
+            float chBusL[3] = {0.0f, 0.0f, 0.0f};
+            float chBusR[3] = {0.0f, 0.0f, 0.0f};
 
             for (int vIdx = 0; vIdx < polyLimit; ++vIdx) {
                 if (!voices[vIdx].isActive()) continue;
-                float voiceSample = voices[vIdx].renderSample(oscVolumes, oscTunes, smoothCutoff, smoothRes, envAmt, lfoModOct, drift, drive, keyTrack, velSens, osFactor);
-                float panDir = ((vIdx & 1) == 0) ? -1.0f : 1.0f;
-                float voiceSpread = spread * 0.35f * panDir;
-                float gainL = 0.707f * (1.0f - voiceSpread);
-                float gainR = 0.707f * (1.0f + voiceSpread);
-                sumL += voiceSample * gainL;
-                sumR += voiceSample * gainR;
+
+                float voiceChOut[3] = {0.0f, 0.0f, 0.0f};
+                voices[vIdx].renderChannels(
+                    oscVolumes,
+                    oscTunes,
+                    smoothCutoff,
+                    smoothRes,
+                    envAmt,
+                    lfoModOct,
+                    drift,
+                    drive,
+                    keyTrack,
+                    velSens,
+                    osFactor,
+                    voiceChOut
+                );
+
+                float voicePanDir = ((vIdx & 1) == 0) ? -1.0f : 1.0f;
+                for (int c = 0; c < 3; ++c) {
+                    float pan = spread * ((0.25f * voicePanDir) + chStereoBias[c]);
+                    float gainL = 0.707f * (1.0f - pan);
+                    float gainR = 0.707f * (1.0f + pan);
+                    chBusL[c] += voiceChOut[c] * gainL;
+                    chBusR[c] += voiceChOut[c] * gainR;
+                }
             }
 
-            sumL *= fixedVoiceHeadroom;
-            sumR *= fixedVoiceHeadroom;
+            // SOMA EXCLUSIVA NO BARRAMENTO MASTER:
+            // Cada um dos 3 canais passa pelo seu próprio Tape Delay e DC Blocker isoladamente,
+            // e eles só se encontram na soma final (masterSumL / masterSumR)!
+            float masterSumL = 0.0f;
+            float masterSumR = 0.0f;
 
-            float delayedL = 0.0f, delayedR = 0.0f;
-            tapeDelay.processStereo(sumL, sumR, smoothDelayTime, dFb, dMix, spread, delayedL, delayedR);
+            for (int c = 0; c < 3; ++c) {
+                float busInL = chBusL[c] * fixedVoiceHeadroom;
+                float busInR = chBusR[c] * fixedVoiceHeadroom;
 
-            float cleanL = dcBlockerL.process(delayedL);
-            float cleanR = dcBlockerR.process(delayedR);
+                float chDelayedL = 0.0f, chDelayedR = 0.0f;
+                tapeDelay[c].processStereo(busInL, busInR, smoothDelayTime, dFb, dMix, spread, chDelayedL, chDelayedR);
 
-            // Saída linear pura com proteção transparente apenas nos picos extremos
-            float outL = transparentMasterLimiter(cleanL * smoothMaster);
-            float outR = transparentMasterLimiter(cleanR * smoothMaster);
+                masterSumL += dcBlockerL[c].process(chDelayedL);
+                masterSumR += dcBlockerR[c].process(chDelayedR);
+            }
+
+            // Masterização final transparente após juntar os 3 canais independentes
+            float outL = transparentMasterLimiter(masterSumL * smoothMaster);
+            float outR = transparentMasterLimiter(masterSumR * smoothMaster);
 
             outputBuffer[i * 2] = outL;
             outputBuffer[i * 2 + 1] = outR;
