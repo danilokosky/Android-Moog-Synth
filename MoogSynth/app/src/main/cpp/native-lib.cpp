@@ -24,7 +24,6 @@ private:
     float y1 = 0.0f;
 public:
     float process(float x) {
-        // High-pass em ~10Hz para remover o offset e limpar a "lama" dos graves
         float y = x - x1 + 0.995f * y1;
         x1 = x;
         y1 = y;
@@ -207,7 +206,6 @@ public:
         float highFreqDamp = 1.0f - (normFreq * 0.35f);
         float k = resShaped * 3.85f * std::clamp(highFreqDamp, 0.55f, 1.0f);
 
-        // Ganho mais limpo, sem overdrive excessivo nos graves para evitar que embole
         float driveGain = 1.0f + (driveNorm * 1.5f);
         float bassComp = 1.0f + (resShaped * 0.4f); 
 
@@ -235,7 +233,7 @@ public:
     }
 };
 
-// --- DELAY ANALÓGICO COM HPF CORRIGIDO PARA GRAVES ---
+// --- DELAY ANALÓGICO ---
 class AnalogDelay {
 private:
     std::vector<float> bufferL;
@@ -296,7 +294,6 @@ public:
         float rawL = readFractional(bufferL, baseSamplesL);
         float rawR = readFractional(bufferR, baseSamplesR);
 
-        // CORREÇÃO MUDDY: Corte agressivo de graves dentro do feedback (HPF ~150Hz)
         hpStateL += 0.018f * (rawL - hpStateL);
         hpStateR += 0.018f * (rawR - hpStateR);
         float bandL = rawL - hpStateL;
@@ -418,7 +415,6 @@ public:
         float voiceDriftFactor = 1.0f + ((filterCutoffCalibration - 1.0f) * driftAmount);
         float modulatedCutoff = baseCutoff * voiceDriftFactor * exp2f(totalOctaves);
 
-        // Gain staging corrigido: diminui o sinal enviado ao filtro (0.35f ao invés de 0.58f)
         float filteredSignal = vcf.process(rawMix * 0.35f, modulatedCutoff, resonance, driveNorm, oversampleFactor);
 
         float vcaOut = fastTanh(filteredSignal * (1.0f + driveNorm * 0.35f));
@@ -434,7 +430,7 @@ private:
     std::array<Voice, MAX_VOICES> voices;
     Oscillator lfo;
     AnalogDelay tapeDelay;
-    DCBlocker dcBlockerL, dcBlockerR; // Remove acúmulo de graves de acordes
+    DCBlocker dcBlockerL, dcBlockerR; 
     std::mutex voiceMutex;
     uint64_t voiceCounter = 0;
 
@@ -595,6 +591,12 @@ public:
         for (int vIdx = 0; vIdx < polyLimit; ++vIdx) if (voices[vIdx].isActive()) currentlyActive++;
         activeVoiceCount.store(currentlyActive);
 
+        // CORREÇÃO DA COMPRESSÃO: Calculamos um "Headroom" baseado no número de vozes tocando
+        // Se tocam 4 notas, a raiz é 2 (volume divide pela metade). Se tocam 16, raiz é 4. 
+        // Isso impede que as vozes colidam com a saturação.
+        float headroomK = 1.0f / sqrtf(static_cast<float>(std::max(1, currentlyActive)));
+        float mixGain = headroomK * 0.85f; // Mantemos 15% de folga extra para garantir
+
         for (int i = 0; i < numFrames; ++i) {
             smoothCutoff += smoothCoeff * (targetCutoff - smoothCutoff);
             smoothRes += smoothCoeff * (targetRes - smoothRes);
@@ -615,17 +617,18 @@ public:
                 sumR += voiceSample * gainR;
             }
 
-            float delayedL = 0.0f, delayedR = 0.0f;
-            // Compressão de sum para impedir que acordes estourem o teto antes do delay
-            sumL = fastTanh(sumL * 0.7f);
-            sumR = fastTanh(sumR * 0.7f);
+            // Aplicamos a compensação dinâmica aqui, reduzindo o volume ANTES da saturação
+            sumL *= mixGain;
+            sumR *= mixGain;
 
+            // Removi a compressão (fastTanh) destrutiva que existia antes do Tape Delay
+            float delayedL = 0.0f, delayedR = 0.0f;
             tapeDelay.processStereo(sumL, sumR, smoothDelayTime, dFb, dMix, spread, delayedL, delayedR);
 
-            // Aplica filtro bloqueador de DC no master final para limpeza de lama grave
             float cleanL = dcBlockerL.process(delayedL);
             float cleanR = dcBlockerR.process(delayedR);
 
+            // A saturação final ocorre apenas de forma muito leve, com o sinal já escalado e limpo
             float outL = fastTanh(cleanL * smoothMaster);
             float outR = fastTanh(cleanR * smoothMaster);
 
