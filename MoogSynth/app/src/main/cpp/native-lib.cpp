@@ -455,8 +455,7 @@ public:
 
         float envOctaves = (filterEnvAmtHz / 5000.0f) * 4.5f * fEnvVal * velFilterBoost;
 
-        // CORREÇÃO CRÍTICA DO GRAVE ESCONDIDO:
-        // Nas notas graves (< MIDI 60), o Key Tracking agora é suavizado (apenas 25%) para NUNCA fechar
+        // Nas notas graves (< MIDI 60), o Key Tracking é suavizado (apenas 25%) para NUNCA fechar
         // o filtro nas notas baixas, enquanto nas notas agudas (> 60) ele abre 100% para dar brilho!
         float noteOffset = static_cast<float>(currentNote) - 60.0f;
         float keyTrackOctaves = (noteOffset >= 0.0f)
@@ -471,13 +470,12 @@ public:
         float filteredSignal = vcf.process(rawMix * 0.50f, modulatedCutoff, resonance, driveNorm, oversampleFactor);
 
         // CONTORNO SUB-BASS MOOG: Dá peso, corpo e presença às notas graves (< C4)
-        // para que o baixo tenha fundamento profundo e nunca se esconda atrás das notas agudas!
         float lowNoteWeight = std::clamp((64.0f - static_cast<float>(currentNote)) / 28.0f, 0.0f, 1.0f);
-        float shelfAlpha = std::clamp(1100.0f / sampleRate, 0.001f, 0.2f); // Filtro shelf centrado em ~180Hz
+        float shelfAlpha = std::clamp(1100.0f / sampleRate, 0.001f, 0.2f);
         bassShelfState += shelfAlpha * (filteredSignal - bassShelfState);
         float fullBodySignal = filteredSignal + (bassShelfState * lowNoteWeight * 0.65f);
 
-        // Saída do VCA 100% linear (sem fastTanh esmagando a dinâmica da nota!)
+        // Saída do VCA 100% linear
         return fullBodySignal * ampEnv.nextLevel() * velFactor;
     }
 };
