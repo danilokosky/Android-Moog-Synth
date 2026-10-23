@@ -40,11 +40,126 @@ import kotlin.math.exp
 import kotlin.math.ln
 import kotlin.math.roundToInt
 
-// Modelo de Slot de Mapeamento MIDI (ex: "Launchkey MK4")
+// Modelo de Slot de Mapeamento MIDI
 data class MidiMappingSlot(
     val id: String = UUID.randomUUID().toString(),
     val name: String,
     val mappings: Map<String, Int>
+)
+
+// Modelo de Preset de Timbre Completo (Todos os 22 Knobs + 3 Seletores de Onda)
+data class SynthPreset(
+    val id: String = UUID.randomUUID().toString(),
+    val name: String,
+    val osc1Vol: Float, val osc1Tune: Float, val osc1Wave: Int,
+    val osc2Vol: Float, val osc2Tune: Float, val osc2Wave: Int,
+    val osc3Vol: Float, val osc3Tune: Float, val osc3Wave: Int,
+    val cutoffNorm: Float, val resNorm: Float, val envAmtNorm: Float,
+    val fAttack: Float, val fDecay: Float, val fSustain: Float, val fRelease: Float,
+    val lfoRateNorm: Float, val lfoDepthNorm: Float,
+    val delayTimeNorm: Float, val delayFbNorm: Float, val delayMixNorm: Float,
+    val aAttack: Float, val aDecay: Float, val aSustain: Float, val aRelease: Float,
+    val masterNorm: Float
+)
+
+// Banco de Fábrica com os 8 Presets Clássicos de Sintetizador Analógico
+fun getFactoryPresets(): List<SynthPreset> = listOf(
+    SynthPreset(
+        name = "1. Classic Minimoog Lead",
+        osc1Vol = 0.85f, osc1Tune = 0.50f, osc1Wave = 0,  // Saw (0 st)
+        osc2Vol = 0.70f, osc2Tune = 0.50f, osc2Wave = 0,  // Saw (0 st)
+        osc3Vol = 0.55f, osc3Tune = 0.25f, osc3Wave = 0,  // Saw (-12 st sub)
+        cutoffNorm = 0.62f, resNorm = 0.42f, envAmtNorm = 0.55f,
+        fAttack = 0.02f, fDecay = 0.30f, fSustain = 0.35f, fRelease = 0.25f,
+        lfoRateNorm = 0.28f, lfoDepthNorm = 0.04f,
+        delayTimeNorm = 0.35f, delayFbNorm = 0.42f, delayMixNorm = 0.28f,
+        aAttack = 0.01f, aDecay = 0.30f, aSustain = 0.85f, aRelease = 0.22f,
+        masterNorm = 0.85f
+    ),
+    SynthPreset(
+        name = "2. Taurus Sub Bass",
+        osc1Vol = 0.90f, osc1Tune = 0.25f, osc1Wave = 0,  // Saw (-12 st)
+        osc2Vol = 0.85f, osc2Tune = 0.25f, osc2Wave = 1,  // Square (-12 st)
+        osc3Vol = 0.65f, osc3Tune = 0.50f, osc3Wave = 2,  // Triangle (0 st)
+        cutoffNorm = 0.28f, resNorm = 0.52f, envAmtNorm = 0.65f,
+        fAttack = 0.005f, fDecay = 0.18f, fSustain = 0.10f, fRelease = 0.15f,
+        lfoRateNorm = 0.15f, lfoDepthNorm = 0.0f,
+        delayTimeNorm = 0.25f, delayFbNorm = 0.15f, delayMixNorm = 0.0f,
+        aAttack = 0.005f, aDecay = 0.25f, aSustain = 0.75f, aRelease = 0.15f,
+        masterNorm = 0.90f
+    ),
+    SynthPreset(
+        name = "3. Lucky Man Solo",
+        osc1Vol = 0.85f, osc1Tune = 0.50f, osc1Wave = 1,  // Square (0 st)
+        osc2Vol = 0.75f, osc2Tune = 0.75f, osc2Wave = 1,  // Square (+12 st)
+        osc3Vol = 0.60f, osc3Tune = 0.25f, osc3Wave = 2,  // Triangle (-12 st)
+        cutoffNorm = 0.68f, resNorm = 0.38f, envAmtNorm = 0.40f,
+        fAttack = 0.03f, fDecay = 0.35f, fSustain = 0.50f, fRelease = 0.35f,
+        lfoRateNorm = 0.30f, lfoDepthNorm = 0.06f,
+        delayTimeNorm = 0.42f, delayFbNorm = 0.48f, delayMixNorm = 0.32f,
+        aAttack = 0.02f, aDecay = 0.30f, aSustain = 0.90f, aRelease = 0.35f,
+        masterNorm = 0.85f
+    ),
+    SynthPreset(
+        name = "4. Blade Runner Brass",
+        osc1Vol = 0.85f, osc1Tune = 0.50f, osc1Wave = 0,  // Saw (0 st)
+        osc2Vol = 0.80f, osc2Tune = 0.50f, osc2Wave = 0,  // Saw (0 st)
+        osc3Vol = 0.50f, osc3Tune = 0.25f, osc3Wave = 1,  // Square (-12 st)
+        cutoffNorm = 0.38f, resNorm = 0.32f, envAmtNorm = 0.72f,
+        fAttack = 0.18f, fDecay = 0.45f, fSustain = 0.55f, fRelease = 0.45f,
+        lfoRateNorm = 0.22f, lfoDepthNorm = 0.05f,
+        delayTimeNorm = 0.48f, delayFbNorm = 0.52f, delayMixNorm = 0.38f,
+        aAttack = 0.12f, aDecay = 0.40f, aSustain = 0.85f, aRelease = 0.50f,
+        masterNorm = 0.85f
+    ),
+    SynthPreset(
+        name = "5. Funky Bernie Worm",
+        osc1Vol = 0.85f, osc1Tune = 0.25f, osc1Wave = 0,  // Saw (-12 st)
+        osc2Vol = 0.75f, osc2Tune = 0.50f, osc2Wave = 1,  // Square (0 st)
+        osc3Vol = 0.40f, osc3Tune = 0.50f, osc3Wave = 3,  // Sine (0 st)
+        cutoffNorm = 0.32f, resNorm = 0.68f, envAmtNorm = 0.82f,
+        fAttack = 0.01f, fDecay = 0.16f, fSustain = 0.05f, fRelease = 0.12f,
+        lfoRateNorm = 0.32f, lfoDepthNorm = 0.22f,
+        delayTimeNorm = 0.28f, delayFbNorm = 0.30f, delayMixNorm = 0.15f,
+        aAttack = 0.005f, aDecay = 0.20f, aSustain = 0.65f, aRelease = 0.12f,
+        masterNorm = 0.85f
+    ),
+    SynthPreset(
+        name = "6. Stranger Synth Pluck",
+        osc1Vol = 0.85f, osc1Tune = 0.50f, osc1Wave = 0,  // Saw (0 st)
+        osc2Vol = 0.70f, osc2Tune = 0.25f, osc2Wave = 1,  // Square (-12 st)
+        osc3Vol = 0.55f, osc3Tune = 0.75f, osc3Wave = 2,  // Triangle (+12 st)
+        cutoffNorm = 0.25f, resNorm = 0.48f, envAmtNorm = 0.78f,
+        fAttack = 0.005f, fDecay = 0.12f, fSustain = 0.0f, fRelease = 0.15f,
+        lfoRateNorm = 0.18f, lfoDepthNorm = 0.03f,
+        delayTimeNorm = 0.32f, delayFbNorm = 0.55f, delayMixNorm = 0.35f,
+        aAttack = 0.005f, aDecay = 0.15f, aSustain = 0.0f, aRelease = 0.18f,
+        masterNorm = 0.88f
+    ),
+    SynthPreset(
+        name = "7. Cosmic Analog Pad",
+        osc1Vol = 0.75f, osc1Tune = 0.50f, osc1Wave = 0,   // Saw (0 st)
+        osc2Vol = 0.65f, osc2Tune = 0.25f, osc2Wave = 1,   // Square (-12 st)
+        osc3Vol = 0.55f, osc3Tune = 0.645f, osc3Wave = 2,  // Triangle (+7 st 5ª justa)
+        cutoffNorm = 0.52f, resNorm = 0.40f, envAmtNorm = 0.45f,
+        fAttack = 0.35f, fDecay = 0.55f, fSustain = 0.65f, fRelease = 0.65f,
+        lfoRateNorm = 0.12f, lfoDepthNorm = 0.15f,
+        delayTimeNorm = 0.55f, delayFbNorm = 0.60f, delayMixNorm = 0.42f,
+        aAttack = 0.30f, aDecay = 0.50f, aSustain = 0.80f, aRelease = 0.70f,
+        masterNorm = 0.82f
+    ),
+    SynthPreset(
+        name = "8. Sci-Fi Filter Sweep",
+        osc1Vol = 0.80f, osc1Tune = 0.50f, osc1Wave = 0,  // Saw
+        osc2Vol = 0.80f, osc2Tune = 0.25f, osc2Wave = 1,  // Square (-12 st)
+        osc3Vol = 0.70f, osc3Tune = 0.645f, osc3Wave = 0, // Saw (+7 st)
+        cutoffNorm = 0.48f, resNorm = 0.85f, envAmtNorm = 0.60f,
+        fAttack = 0.08f, fDecay = 0.40f, fSustain = 0.40f, fRelease = 0.50f,
+        lfoRateNorm = 0.45f, lfoDepthNorm = 0.65f,
+        delayTimeNorm = 0.45f, delayFbNorm = 0.65f, delayMixNorm = 0.45f,
+        aAttack = 0.02f, aDecay = 0.40f, aSustain = 0.80f, aRelease = 0.55f,
+        masterNorm = 0.80f
+    )
 )
 
 @Composable
@@ -88,21 +203,114 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
     var aRelease by remember { mutableStateOf(0.3f) }
     var masterNorm by remember { mutableStateOf(0.85f) }
 
-    // --- SISTEMA DE SLOTS E PERSISTÊNCIA DO MIDI LEARN ---
+    // Funções de conversão matemática
+    fun normToCutoffHz(norm: Float): Float {
+        val minHz = 20f
+        val maxHz = 12000f
+        return exp(norm * (ln(maxHz) - ln(minHz)) + ln(minHz))
+    }
+
+    fun normToSemitones(norm: Float): Float = ((norm * 48f) - 24f).roundToInt().toFloat()
+
+    // --- 1. GERENCIADOR DE PRESETS DE TIMBRES (PATCHES) ---
+    val presetsList = remember { mutableStateListOf<SynthPreset>() }
+    var currentPresetId by remember { mutableStateOf("") }
+    var isPresetDropdownExpanded by remember { mutableStateOf(false) }
+
+    // --- 2. GERENCIADOR DE SLOTS MIDI LEARN ---
     var isMidiLearnMode by remember { mutableStateOf(false) }
     var selectedParamForLearn by remember { mutableStateOf<String?>(null) }
     val paramToCCMap = remember { mutableStateMapOf<String, Int>() }
-
     val midiSlots = remember { mutableStateListOf<MidiMappingSlot>() }
     var currentSlotId by remember { mutableStateOf("") }
     var isSlotDropdownExpanded by remember { mutableStateOf(false) }
 
-    // Estado da caixa de diálogo para Criar ou Renomear Slot
-    var showSlotDialog by remember { mutableStateOf(false) }
-    var isCreatingNewSlot by remember { mutableStateOf(false) }
-    var slotNameInput by remember { mutableStateOf("") }
+    // Estado da caixa de diálogo compartilhada (Criar/Renomear Preset ou Slot MIDI)
+    var showNameDialog by remember { mutableStateOf(false) }
+    var dialogTargetIsPreset by remember { mutableStateOf(true) } // true = Preset, false = Slot MIDI
+    var isCreatingNewItem by remember { mutableStateOf(false) }
+    var nameInputText by remember { mutableStateOf("") }
 
-    // Função que grava todos os Slots e o Slot ativo na memória permanente do Android
+    // Grava todos os Presets no disco
+    fun savePresetsToDisk(list: List<SynthPreset>, activeId: String) {
+        val root = JSONObject()
+        root.put("activePresetId", activeId)
+        val arr = JSONArray()
+        list.forEach { p ->
+            val o = JSONObject()
+            o.put("id", p.id); o.put("name", p.name)
+            o.put("osc1Vol", p.osc1Vol.toDouble()); o.put("osc1Tune", p.osc1Tune.toDouble()); o.put("osc1Wave", p.osc1Wave)
+            o.put("osc2Vol", p.osc2Vol.toDouble()); o.put("osc2Tune", p.osc2Tune.toDouble()); o.put("osc2Wave", p.osc2Wave)
+            o.put("osc3Vol", p.osc3Vol.toDouble()); o.put("osc3Tune", p.osc3Tune.toDouble()); o.put("osc3Wave", p.osc3Wave)
+            o.put("cutoffNorm", p.cutoffNorm.toDouble()); o.put("resNorm", p.resNorm.toDouble()); o.put("envAmtNorm", p.envAmtNorm.toDouble())
+            o.put("fAttack", p.fAttack.toDouble()); o.put("fDecay", p.fDecay.toDouble()); o.put("fSustain", p.fSustain.toDouble()); o.put("fRelease", p.fRelease.toDouble())
+            o.put("lfoRateNorm", p.lfoRateNorm.toDouble()); o.put("lfoDepthNorm", p.lfoDepthNorm.toDouble())
+            o.put("delayTimeNorm", p.delayTimeNorm.toDouble()); o.put("delayFbNorm", p.delayFbNorm.toDouble()); o.put("delayMixNorm", p.delayMixNorm.toDouble())
+            o.put("aAttack", p.aAttack.toDouble()); o.put("aDecay", p.aDecay.toDouble()); o.put("aSustain", p.aSustain.toDouble()); o.put("aRelease", p.aRelease.toDouble())
+            o.put("masterNorm", p.masterNorm.toDouble())
+            arr.put(o)
+        }
+        root.put("presets", arr)
+        prefs.edit().putString("saved_synth_presets_json", root.toString()).apply()
+    }
+
+    // Sincroniza qualquer movimento de Knob ou Onda imediatamente no Preset atual (Auto-Save)
+    fun syncCurrentStateToActivePreset() {
+        val idx = presetsList.indexOfFirst { it.id == currentPresetId }
+        if (idx != -1) {
+            presetsList[idx] = presetsList[idx].copy(
+                osc1Vol = osc1Vol, osc1Tune = osc1Tune, osc1Wave = osc1Wave,
+                osc2Vol = osc2Vol, osc2Tune = osc2Tune, osc2Wave = osc2Wave,
+                osc3Vol = osc3Vol, osc3Tune = osc3Tune, osc3Wave = osc3Wave,
+                cutoffNorm = cutoffNorm, resNorm = resNorm, envAmtNorm = envAmtNorm,
+                fAttack = fAttack, fDecay = fDecay, fSustain = fSustain, fRelease = fRelease,
+                lfoRateNorm = lfoRateNorm, lfoDepthNorm = lfoDepthNorm,
+                delayTimeNorm = delayTimeNorm, delayFbNorm = delayFbNorm, delayMixNorm = delayMixNorm,
+                aAttack = aAttack, aDecay = aDecay, aSustain = aSustain, aRelease = aRelease,
+                masterNorm = masterNorm
+            )
+            savePresetsToDisk(presetsList, currentPresetId)
+        }
+    }
+
+    // Carrega um Preset e envia todos os parâmetros para o motor C++ imediatamente
+    fun applyPresetToEngine(p: SynthPreset) {
+        currentPresetId = p.id
+
+        osc1Vol = p.osc1Vol; osc1Tune = p.osc1Tune; osc1Wave = p.osc1Wave
+        osc2Vol = p.osc2Vol; osc2Tune = p.osc2Tune; osc2Wave = p.osc2Wave
+        osc3Vol = p.osc3Vol; osc3Tune = p.osc3Tune; osc3Wave = p.osc3Wave
+
+        cutoffNorm = p.cutoffNorm; resNorm = p.resNorm; envAmtNorm = p.envAmtNorm
+        fAttack = p.fAttack; fDecay = p.fDecay; fSustain = p.fSustain; fRelease = p.fRelease
+
+        lfoRateNorm = p.lfoRateNorm; lfoDepthNorm = p.lfoDepthNorm
+        delayTimeNorm = p.delayTimeNorm; delayFbNorm = p.delayFbNorm; delayMixNorm = p.delayMixNorm
+
+        aAttack = p.aAttack; aDecay = p.aDecay; aSustain = p.aSustain; aRelease = p.aRelease
+        masterNorm = p.masterNorm
+
+        // Atualiza o motor C++ (Oboe)
+        audioEngine.setOscVolume(0, osc1Vol); audioEngine.setOscTune(0, normToSemitones(osc1Tune)); audioEngine.setOscWave(0, osc1Wave)
+        audioEngine.setOscVolume(1, osc2Vol); audioEngine.setOscTune(1, normToSemitones(osc2Tune)); audioEngine.setOscWave(1, osc2Wave)
+        audioEngine.setOscVolume(2, osc3Vol); audioEngine.setOscTune(2, normToSemitones(osc3Tune)); audioEngine.setOscWave(2, osc3Wave)
+
+        audioEngine.setFilterCutoff(normToCutoffHz(cutoffNorm))
+        audioEngine.setFilterResonance(resNorm)
+        audioEngine.setFilterEnvAmount(envAmtNorm * 5000f)
+        audioEngine.setFilterADSR(fAttack * 2f, fDecay * 2f, fSustain, fRelease * 3f)
+
+        audioEngine.setLfoRate(0.1f + lfoRateNorm * 19.9f)
+        audioEngine.setLfoDepth(lfoDepthNorm * 3000f)
+        audioEngine.setDelayParams(0.05f + delayTimeNorm * 0.95f, delayFbNorm, delayMixNorm)
+
+        audioEngine.setAmpADSR(aAttack * 2f, aDecay * 2f, aSustain, aRelease * 3f)
+        audioEngine.setMasterVolume(masterNorm)
+
+        savePresetsToDisk(presetsList, currentPresetId)
+    }
+
+    // Grava os Slots MIDI no disco
     fun saveSlotsToDisk(slots: List<MidiMappingSlot>, activeId: String) {
         val root = JSONObject()
         root.put("activeSlotId", activeId)
@@ -120,7 +328,6 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
         prefs.edit().putString("saved_midi_slots_json", root.toString()).apply()
     }
 
-    // Sincroniza qualquer alteração do mapa atual imediatamente dentro do Slot ativo e salva no disco
     fun syncCurrentMapToActiveSlot() {
         val idx = midiSlots.indexOfFirst { it.id == currentSlotId }
         if (idx != -1) {
@@ -129,7 +336,6 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
         }
     }
 
-    // Carrega um Slot específico para os controles ativos
     fun selectSlot(slot: MidiMappingSlot) {
         currentSlotId = slot.id
         paramToCCMap.clear()
@@ -137,12 +343,13 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
         saveSlotsToDisk(midiSlots, currentSlotId)
     }
 
-    // Carrega os Slots salvos assim que o aplicativo abre
+    // Inicialização ao abrir o aplicativo: Carrega Slots MIDI e Presets de Timbres
     LaunchedEffect(Unit) {
-        val rawJson = prefs.getString("saved_midi_slots_json", null)
-        if (rawJson != null) {
+        // 1. Carrega Slots MIDI
+        val rawSlotsJson = prefs.getString("saved_midi_slots_json", null)
+        if (rawSlotsJson != null) {
             try {
-                val root = JSONObject(rawJson)
+                val root = JSONObject(rawSlotsJson)
                 val savedActiveId = root.optString("activeSlotId", "")
                 val arr = root.getJSONArray("slots")
                 val loaded = mutableListOf<MidiMappingSlot>()
@@ -171,25 +378,60 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
                 e.printStackTrace()
             }
         }
-        // Se for a primeira vez abrindo o app, cria o slot inicial padrão
         if (midiSlots.isEmpty()) {
             val defaultSlot = MidiMappingSlot(name = "Launchkey MK4", mappings = emptyMap())
             midiSlots.add(defaultSlot)
             currentSlotId = defaultSlot.id
             saveSlotsToDisk(midiSlots, currentSlotId)
         }
+
+        // 2. Carrega Presets de Timbres (ou popula com os 8 Presets Lendários de fábrica)
+        val rawPresetsJson = prefs.getString("saved_synth_presets_json", null)
+        if (rawPresetsJson != null) {
+            try {
+                val root = JSONObject(rawPresetsJson)
+                val savedActivePresetId = root.optString("activePresetId", "")
+                val arr = root.getJSONArray("presets")
+                val loadedPresets = mutableListOf<SynthPreset>()
+                for (i in 0 until arr.length()) {
+                    val o = arr.getJSONObject(i)
+                    loadedPresets.add(
+                        SynthPreset(
+                            id = o.getString("id"),
+                            name = o.getString("name"),
+                            osc1Vol = o.getDouble("osc1Vol").toFloat(), osc1Tune = o.getDouble("osc1Tune").toFloat(), osc1Wave = o.getInt("osc1Wave"),
+                            osc2Vol = o.getDouble("osc2Vol").toFloat(), osc2Tune = o.getDouble("osc2Tune").toFloat(), osc2Wave = o.getInt("osc2Wave"),
+                            osc3Vol = o.getDouble("osc3Vol").toFloat(), osc3Tune = o.getDouble("osc3Tune").toFloat(), osc3Wave = o.getInt("osc3Wave"),
+                            cutoffNorm = o.getDouble("cutoffNorm").toFloat(), resNorm = o.getDouble("resNorm").toFloat(), envAmtNorm = o.getDouble("envAmtNorm").toFloat(),
+                            fAttack = o.getDouble("fAttack").toFloat(), fDecay = o.getDouble("fDecay").toFloat(), fSustain = o.getDouble("fSustain").toFloat(), fRelease = o.getDouble("fRelease").toFloat(),
+                            lfoRateNorm = o.getDouble("lfoRateNorm").toFloat(), lfoDepthNorm = o.getDouble("lfoDepthNorm").toFloat(),
+                            delayTimeNorm = o.getDouble("delayTimeNorm").toFloat(), delayFbNorm = o.getDouble("delayFbNorm").toFloat(), delayMixNorm = o.getDouble("delayMixNorm").toFloat(),
+                            aAttack = o.getDouble("aAttack").toFloat(), aDecay = o.getDouble("aDecay").toFloat(), aSustain = o.getDouble("aSustain").toFloat(), aRelease = o.getDouble("aRelease").toFloat(),
+                            masterNorm = o.getDouble("masterNorm").toFloat()
+                        )
+                    )
+                }
+                if (loadedPresets.isNotEmpty()) {
+                    presetsList.clear()
+                    presetsList.addAll(loadedPresets)
+                    val activePreset = loadedPresets.find { it.id == savedActivePresetId } ?: loadedPresets.first()
+                    applyPresetToEngine(activePreset)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+        if (presetsList.isEmpty()) {
+            val factory = getFactoryPresets()
+            presetsList.addAll(factory)
+            applyPresetToEngine(factory.first())
+        }
     }
 
     val currentSlotName = midiSlots.find { it.id == currentSlotId }?.name ?: "Slot 1"
+    val currentPresetName = presetsList.find { it.id == currentPresetId }?.name ?: "Preset 1"
 
-    fun normToCutoffHz(norm: Float): Float {
-        val minHz = 20f
-        val maxHz = 12000f
-        return exp(norm * (ln(maxHz) - ln(minHz)) + ln(minHz))
-    }
-
-    fun normToSemitones(norm: Float): Float = ((norm * 48f) - 24f).roundToInt().toFloat()
-
+    // Atualiza qualquer parâmetro e já faz o Auto-Save imediato no Preset Ativo!
     fun updateParamById(paramId: String, normVal: Float) {
         val v = normVal.coerceIn(0f, 1f)
         when (paramId) {
@@ -217,9 +459,10 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
             "A_REL" -> { aRelease = v; audioEngine.setAmpADSR(aAttack * 2f, aDecay * 2f, aSustain, aRelease * 3f) }
             "MASTER" -> { masterNorm = v; audioEngine.setMasterVolume(v) }
         }
+        syncCurrentStateToActivePreset()
     }
 
-    // Escuta comandos MIDI CC e salva automaticamente no Slot atual ao mapear
+    // Escuta comandos MIDI CC
     LaunchedEffect(incomingMidiCC) {
         incomingMidiCC?.let { event ->
             val norm = (event.value / 127f).coerceIn(0f, 1f)
@@ -230,8 +473,6 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
 
                 paramToCCMap[targetParam] = event.cc
                 updateParamById(targetParam, norm)
-
-                // Auto-Save imediato no Slot ativo!
                 syncCurrentMapToActiveSlot()
 
                 selectedParamForLearn = null
@@ -255,7 +496,7 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
             mappedCC = if (isMidiLearnMode) paramToCCMap[paramId] else null,
             onUnmap = {
                 paramToCCMap.remove(paramId)
-                syncCurrentMapToActiveSlot() // Auto-Save ao remover mapeamento no '×'
+                syncCurrentMapToActiveSlot()
             },
             onKnobClick = {
                 if (isMidiLearnMode) {
@@ -284,16 +525,21 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
         }
     }
 
-    // Diálogo Modal para Renomear ou Criar Novo Slot
-    if (showSlotDialog) {
+    // Diálogo Modal Único para Criar/Renomear Presets de Timbres ou Slots MIDI
+    if (showNameDialog) {
         AlertDialog(
-            onDismissRequest = { showSlotDialog = false },
+            onDismissRequest = { showNameDialog = false },
             containerColor = Color(0xFF181B20),
             titleContentColor = Color.White,
             textContentColor = Color.LightGray,
             title = {
                 Text(
-                    text = if (isCreatingNewSlot) "Novo Slot de Controlador" else "Renomear Slot Atual",
+                    text = when {
+                        dialogTargetIsPreset && isCreatingNewItem -> "Novo Preset de Timbre"
+                        dialogTargetIsPreset && !isCreatingNewItem -> "Renomear Preset Atual"
+                        !dialogTargetIsPreset && isCreatingNewItem -> "Novo Slot de Controlador MIDI"
+                        else -> "Renomear Slot MIDI Atual"
+                    },
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold
                 )
@@ -301,14 +547,17 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
             text = {
                 Column {
                     Text(
-                        text = "Digite o nome do controlador ou perfil MIDI (ex: Launchkey MK4):",
+                        text = if (dialogTargetIsPreset)
+                            "Digite o nome do Timbre/Patch (o novo preset herdará a posição atual dos botões):"
+                        else
+                            "Digite o nome do controlador ou perfil MIDI (ex: Launchkey MK4):",
                         fontSize = 12.sp,
                         color = Color(0xFF94A3B8)
                     )
                     Spacer(modifier = Modifier.height(10.dp))
                     OutlinedTextField(
-                        value = slotNameInput,
-                        onValueChange = { slotNameInput = it },
+                        value = nameInputText,
+                        onValueChange = { nameInputText = it },
                         singleLine = true,
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor = Color.White,
@@ -323,26 +572,54 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
             confirmButton = {
                 TextButton(
                     onClick = {
-                        val finalName = slotNameInput.trim().ifEmpty { "Controlador MIDI" }
-                        if (isCreatingNewSlot) {
-                            val newSlot = MidiMappingSlot(name = finalName, mappings = emptyMap())
-                            midiSlots.add(newSlot)
-                            selectSlot(newSlot)
+                        val finalName = nameInputText.trim().ifEmpty {
+                            if (dialogTargetIsPreset) "Custom Patch" else "Controlador MIDI"
+                        }
+                        if (dialogTargetIsPreset) {
+                            if (isCreatingNewItem) {
+                                // Cria o novo Preset copiando a configuração sonora atual da tela
+                                val newPreset = SynthPreset(
+                                    name = finalName,
+                                    osc1Vol = osc1Vol, osc1Tune = osc1Tune, osc1Wave = osc1Wave,
+                                    osc2Vol = osc2Vol, osc2Tune = osc2Tune, osc2Wave = osc2Wave,
+                                    osc3Vol = osc3Vol, osc3Tune = osc3Tune, osc3Wave = osc3Wave,
+                                    cutoffNorm = cutoffNorm, resNorm = resNorm, envAmtNorm = envAmtNorm,
+                                    fAttack = fAttack, fDecay = fDecay, fSustain = fSustain, fRelease = fRelease,
+                                    lfoRateNorm = lfoRateNorm, lfoDepthNorm = lfoDepthNorm,
+                                    delayTimeNorm = delayTimeNorm, delayFbNorm = delayFbNorm, delayMixNorm = delayMixNorm,
+                                    aAttack = aAttack, aDecay = aDecay, aSustain = aSustain, aRelease = aRelease,
+                                    masterNorm = masterNorm
+                                )
+                                presetsList.add(newPreset)
+                                applyPresetToEngine(newPreset)
+                            } else {
+                                val idx = presetsList.indexOfFirst { it.id == currentPresetId }
+                                if (idx != -1) {
+                                    presetsList[idx] = presetsList[idx].copy(name = finalName)
+                                    savePresetsToDisk(presetsList, currentPresetId)
+                                }
+                            }
                         } else {
-                            val idx = midiSlots.indexOfFirst { it.id == currentSlotId }
-                            if (idx != -1) {
-                                midiSlots[idx] = midiSlots[idx].copy(name = finalName)
-                                saveSlotsToDisk(midiSlots, currentSlotId)
+                            if (isCreatingNewItem) {
+                                val newSlot = MidiMappingSlot(name = finalName, mappings = emptyMap())
+                                midiSlots.add(newSlot)
+                                selectSlot(newSlot)
+                            } else {
+                                val idx = midiSlots.indexOfFirst { it.id == currentSlotId }
+                                if (idx != -1) {
+                                    midiSlots[idx] = midiSlots[idx].copy(name = finalName)
+                                    saveSlotsToDisk(midiSlots, currentSlotId)
+                                }
                             }
                         }
-                        showSlotDialog = false
+                        showNameDialog = false
                     }
                 ) {
                     Text("SALVAR", color = Color(0xFFF59E0B), fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showSlotDialog = false }) {
+                TextButton(onClick = { showNameDialog = false }) {
                     Text("CANCELAR", color = Color.Gray)
                 }
             }
@@ -357,62 +634,65 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
             .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Barra Superior: Título + Osciloscópio + Seletor de Slots MIDI + MIDI Learn + Panic
+        // Barra Superior: Título + Osciloscópio + Seletor de PRESETS + Seletor de SLOTS MIDI + MIDI Learn + Panic
         Row(
-            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(bottom = 16.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
+            Column(modifier = Modifier.padding(end = 12.dp)) {
                 Text(
-                    text = "MOOG POLY-D NATIVE (C++ OBOE ENGINE)",
+                    text = "MOOG POLY-D NATIVE",
                     color = Color(0xFFF59E0B),
-                    fontSize = 18.sp,
+                    fontSize = 17.sp,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
                     text = if (isMidiLearnMode) {
-                        if (selectedParamForLearn == null) "MIDI LEARN [$currentSlotName]: Clique num botão da tela para mapear..."
-                        else "AGUARDANDO HARDWARE: Gire um Knob físico para gravar em [$currentSlotName]!"
-                    } else "PERFIL MIDI ATIVO: $currentSlotName (${paramToCCMap.size} controles mapeados)",
+                        if (selectedParamForLearn == null) "MIDI LEARN [$currentSlotName]: Toque num Knob..."
+                        else "GIRAR HARDWARE -> [$selectedParamForLearn]"
+                    } else "TIMBRE: $currentPresetName | MIDI: $currentSlotName",
                     color = if (isMidiLearnMode) Color(0xFFFBBF24) else Color(0xFF94A3B8),
-                    fontSize = 11.sp,
+                    fontSize = 10.sp,
                     fontWeight = FontWeight.Bold
                 )
             }
 
             OscilloscopeView(waveform = waveformBuffer, trigger = frameTrigger)
 
+            Spacer(modifier = Modifier.width(10.dp))
+
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // --- SELETOR DE SLOTS DE MAPEAMENTO MIDI (AO LADO DO MIDI LEARN) ---
+                // --- 1. SELETOR DE PRESETS DE TIMBRES (PATCHES) ---
                 Box {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
                             .background(Color(0xFF181B20), RoundedCornerShape(6.dp))
-                            .border(1.dp, Color(0xFF334155), RoundedCornerShape(6.dp))
+                            .border(1.dp, Color(0xFFF59E0B).copy(alpha = 0.6f), RoundedCornerShape(6.dp))
                     ) {
-                        // Botão Principal que abre a lista de Slots
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
-                                .clickable { isSlotDropdownExpanded = true }
-                                .padding(horizontal = 12.dp, vertical = 8.dp)
+                                .clickable { isPresetDropdownExpanded = true }
+                                .padding(horizontal = 10.dp, vertical = 8.dp)
                         ) {
                             Text(
-                                text = "🎛️ $currentSlotName",
-                                color = Color(0xFFE2E8F0),
-                                fontSize = 12.sp,
+                                text = "🎹 $currentPresetName",
+                                color = Color(0xFFFDE047),
+                                fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text("▼", color = Color(0xFFF59E0B), fontSize = 10.sp)
                         }
 
-                        // Divisória vertical sutil
                         Box(
                             modifier = Modifier
                                 .width(1.dp)
@@ -420,22 +700,175 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
                                 .background(Color(0xFF334155))
                         )
 
-                        // Botão para Renomear o Slot Atual (Ícone Lápis)
+                        // Botão para Renomear o Preset Atual
                         Box(
                             modifier = Modifier
                                 .clickable {
-                                    slotNameInput = currentSlotName
-                                    isCreatingNewSlot = false
-                                    showSlotDialog = true
+                                    nameInputText = currentPresetName
+                                    dialogTargetIsPreset = true
+                                    isCreatingNewItem = false
+                                    showNameDialog = true
                                 }
-                                .padding(horizontal = 10.dp, vertical = 8.dp),
+                                .padding(horizontal = 9.dp, vertical = 8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("✎", color = Color(0xFFF59E0B), fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    DropdownMenu(
+                        expanded = isPresetDropdownExpanded,
+                        onDismissRequest = { isPresetDropdownExpanded = false },
+                        modifier = Modifier
+                            .background(Color(0xFF1E2229))
+                            .border(1.dp, Color(0xFFF59E0B).copy(alpha = 0.5f), RoundedCornerShape(6.dp))
+                            .width(270.dp)
+                    ) {
+                        presetsList.forEach { preset ->
+                            val isSelected = (preset.id == currentPresetId)
+                            DropdownMenuItem(
+                                text = {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = preset.name,
+                                                color = if (isSelected) Color(0xFFF59E0B) else Color.White,
+                                                fontSize = 12.sp,
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                            )
+                                            Text(
+                                                text = "Corte: ${normToCutoffHz(preset.cutoffNorm).toInt()}Hz | Res: ${(preset.resNorm * 100).toInt()}%",
+                                                color = Color.Gray,
+                                                fontSize = 9.sp
+                                            )
+                                        }
+
+                                        // Botão [×] para apagar o Preset
+                                        Box(
+                                            modifier = Modifier
+                                                .size(22.dp)
+                                                .background(Color(0xFF7F1D1D), CircleShape)
+                                                .clickable {
+                                                    if (presetsList.size > 1) {
+                                                        val removingActive = (preset.id == currentPresetId)
+                                                        presetsList.remove(preset)
+                                                        if (removingActive) {
+                                                            applyPresetToEngine(presetsList.first())
+                                                        } else {
+                                                            savePresetsToDisk(presetsList, currentPresetId)
+                                                        }
+                                                    }
+                                                },
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text("×", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                },
+                                onClick = {
+                                    applyPresetToEngine(preset)
+                                    isPresetDropdownExpanded = false
+                                }
+                            )
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(1.dp)
+                                .background(Color(0xFF334155))
+                        )
+
+                        // Criar Novo Preset a partir do som atual
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    text = "+ NOVO PRESET DE TIMBRE...",
+                                    color = Color(0xFFF59E0B),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            },
+                            onClick = {
+                                isPresetDropdownExpanded = false
+                                nameInputText = "User Patch ${presetsList.size + 1}"
+                                dialogTargetIsPreset = true
+                                isCreatingNewItem = true
+                                showNameDialog = true
+                            }
+                        )
+
+                        // Restaurar os 8 Presets Clássicos de Fábrica
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    text = "↺ RESTAURAR PRESETS DE FÁBRICA",
+                                    color = Color(0xFF94A3B8),
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            },
+                            onClick = {
+                                isPresetDropdownExpanded = false
+                                val factory = getFactoryPresets()
+                                presetsList.clear()
+                                presetsList.addAll(factory)
+                                applyPresetToEngine(factory.first())
+                            }
+                        )
+                    }
+                }
+
+                // --- 2. SELETOR DE SLOTS DE MAPEAMENTO MIDI ---
+                Box {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .background(Color(0xFF181B20), RoundedCornerShape(6.dp))
+                            .border(1.dp, Color(0xFF334155), RoundedCornerShape(6.dp))
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .clickable { isSlotDropdownExpanded = true }
+                                .padding(horizontal = 10.dp, vertical = 8.dp)
+                        ) {
+                            Text(
+                                text = "🎛️ $currentSlotName",
+                                color = Color(0xFFE2E8F0),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("▼", color = Color(0xFF38BDF8), fontSize = 10.sp)
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .width(1.dp)
+                                .height(22.dp)
+                                .background(Color(0xFF334155))
+                        )
+
+                        Box(
+                            modifier = Modifier
+                                .clickable {
+                                    nameInputText = currentSlotName
+                                    dialogTargetIsPreset = false
+                                    isCreatingNewItem = false
+                                    showNameDialog = true
+                                }
+                                .padding(horizontal = 9.dp, vertical = 8.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Text("✎", color = Color(0xFF38BDF8), fontSize = 13.sp, fontWeight = FontWeight.Bold)
                         }
                     }
 
-                    // Menu Dropdown com a Lista de Slots Salvos + Botão [×] para apagar + Novo Slot
                     DropdownMenu(
                         expanded = isSlotDropdownExpanded,
                         onDismissRequest = { isSlotDropdownExpanded = false },
@@ -456,7 +889,7 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
                                         Column(modifier = Modifier.weight(1f)) {
                                             Text(
                                                 text = slot.name,
-                                                color = if (isSelected) Color(0xFFF59E0B) else Color.White,
+                                                color = if (isSelected) Color(0xFF38BDF8) else Color.White,
                                                 fontSize = 12.sp,
                                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                                             )
@@ -467,7 +900,6 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
                                             )
                                         }
 
-                                        // Botão [×] para apagar o Slot da lista
                                         Box(
                                             modifier = Modifier
                                                 .size(22.dp)
@@ -482,7 +914,6 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
                                                             saveSlotsToDisk(midiSlots, currentSlotId)
                                                         }
                                                     } else {
-                                                        // Se for o único slot, limpa os mapeamentos dele
                                                         paramToCCMap.clear()
                                                         syncCurrentMapToActiveSlot()
                                                     }
@@ -500,7 +931,6 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
                             )
                         }
 
-                        // Linha separadora e botão "+ NOVO SLOT"
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -519,9 +949,10 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
                             },
                             onClick = {
                                 isSlotDropdownExpanded = false
-                                slotNameInput = "Controlador ${midiSlots.size + 1}"
-                                isCreatingNewSlot = true
-                                showSlotDialog = true
+                                nameInputText = "Controlador ${midiSlots.size + 1}"
+                                dialogTargetIsPreset = false
+                                isCreatingNewItem = true
+                                showNameDialog = true
                             }
                         )
                     }
@@ -543,12 +974,12 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
                             isMidiLearnMode = !isMidiLearnMode
                             selectedParamForLearn = null
                         }
-                        .padding(horizontal = 14.dp, vertical = 8.dp)
+                        .padding(horizontal = 12.dp, vertical = 8.dp)
                 ) {
                     Text(
                         text = if (isMidiLearnMode) "SAIR DO LEARN" else "MIDI LEARN",
                         color = Color.White,
-                        fontSize = 12.sp,
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -559,9 +990,9 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
                         .background(Color(0xFF991B1B), RoundedCornerShape(6.dp))
                         .border(1.dp, Color(0xFFEF4444), RoundedCornerShape(6.dp))
                         .clickable { audioEngine.allNotesOff() }
-                        .padding(horizontal = 14.dp, vertical = 8.dp)
+                        .padding(horizontal = 12.dp, vertical = 8.dp)
                 ) {
-                    Text("PANIC", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Text("PANIC", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -578,7 +1009,11 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
                 OscillatorRow(
                     label = "OSC 1",
                     wave = osc1Wave,
-                    onWaveChange = { osc1Wave = it; audioEngine.setOscWave(0, it) },
+                    onWaveChange = {
+                        osc1Wave = it
+                        audioEngine.setOscWave(0, it)
+                        syncCurrentStateToActivePreset()
+                    },
                     levelKnob = { SmartKnob("OSC1_VOL", "LEVEL", "${(osc1Vol * 100).toInt()}%", osc1Vol) },
                     tuneKnob = {
                         val st = normToSemitones(osc1Tune).toInt()
@@ -589,7 +1024,11 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
                 OscillatorRow(
                     label = "OSC 2",
                     wave = osc2Wave,
-                    onWaveChange = { osc2Wave = it; audioEngine.setOscWave(1, it) },
+                    onWaveChange = {
+                        osc2Wave = it
+                        audioEngine.setOscWave(1, it)
+                        syncCurrentStateToActivePreset()
+                    },
                     levelKnob = { SmartKnob("OSC2_VOL", "LEVEL", "${(osc2Vol * 100).toInt()}%", osc2Vol) },
                     tuneKnob = {
                         val st = normToSemitones(osc2Tune).toInt()
@@ -600,7 +1039,11 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
                 OscillatorRow(
                     label = "OSC 3",
                     wave = osc3Wave,
-                    onWaveChange = { osc3Wave = it; audioEngine.setOscWave(2, it) },
+                    onWaveChange = {
+                        osc3Wave = it
+                        audioEngine.setOscWave(2, it)
+                        syncCurrentStateToActivePreset()
+                    },
                     levelKnob = { SmartKnob("OSC3_VOL", "LEVEL", "${(osc3Vol * 100).toInt()}%", osc3Vol) },
                     tuneKnob = {
                         val st = normToSemitones(osc3Tune).toInt()
@@ -682,7 +1125,6 @@ fun KnobControl(
                 onKnobClick = onKnobClick
             )
 
-            // Balãozinho de CC com botão [×] de desmapear (visível apenas no modo MIDI Learn)
             if (mappedCC != null) {
                 Row(
                     modifier = Modifier
@@ -774,8 +1216,8 @@ fun OscillatorRow(
 fun OscilloscopeView(waveform: FloatArray, trigger: Int) {
     Box(
         modifier = Modifier
-            .width(200.dp)
-            .height(50.dp)
+            .width(180.dp)
+            .height(48.dp)
             .background(Color(0xFF07090C), RoundedCornerShape(6.dp))
             .border(1.dp, Color(0xFF2D323B), RoundedCornerShape(6.dp))
             .padding(4.dp)
