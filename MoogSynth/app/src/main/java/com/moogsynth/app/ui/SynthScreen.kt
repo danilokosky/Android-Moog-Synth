@@ -64,7 +64,6 @@ data class SynthPreset(
     val masterNorm: Float
 )
 
-// Banco de Fábrica com os 8 Presets Clássicos e Ressonâncias Equilibradas
 fun getFactoryPresets(): List<SynthPreset> = listOf(
     SynthPreset(
         name = "1. Classic Minimoog Lead",
@@ -113,54 +112,6 @@ fun getFactoryPresets(): List<SynthPreset> = listOf(
         delayTimeNorm = 0.48f, delayFbNorm = 0.50f, delayMixNorm = 0.35f,
         aAttack = 0.12f, aDecay = 0.40f, aSustain = 0.85f, aRelease = 0.50f,
         masterNorm = 0.85f
-    ),
-    SynthPreset(
-        name = "5. Funky Bernie Worm",
-        osc1Vol = 0.85f, osc1Tune = 0.25f, osc1Wave = 0,
-        osc2Vol = 0.75f, osc2Tune = 0.50f, osc2Wave = 1,
-        osc3Vol = 0.50f, osc3Tune = 0.50f, osc3Wave = 3,
-        cutoffNorm = 0.35f, resNorm = 0.52f, envAmtNorm = 0.75f,
-        fAttack = 0.01f, fDecay = 0.16f, fSustain = 0.08f, fRelease = 0.12f,
-        lfoRateNorm = 0.32f, lfoDepthNorm = 0.18f,
-        delayTimeNorm = 0.28f, delayFbNorm = 0.30f, delayMixNorm = 0.15f,
-        aAttack = 0.005f, aDecay = 0.20f, aSustain = 0.70f, aRelease = 0.12f,
-        masterNorm = 0.85f
-    ),
-    SynthPreset(
-        name = "6. Stranger Synth Pluck",
-        osc1Vol = 0.85f, osc1Tune = 0.50f, osc1Wave = 0,
-        osc2Vol = 0.70f, osc2Tune = 0.25f, osc2Wave = 1,
-        osc3Vol = 0.55f, osc3Tune = 0.75f, osc3Wave = 2,
-        cutoffNorm = 0.28f, resNorm = 0.32f, envAmtNorm = 0.72f,
-        fAttack = 0.005f, fDecay = 0.12f, fSustain = 0.0f, fRelease = 0.15f,
-        lfoRateNorm = 0.18f, lfoDepthNorm = 0.02f,
-        delayTimeNorm = 0.32f, delayFbNorm = 0.50f, delayMixNorm = 0.32f,
-        aAttack = 0.005f, aDecay = 0.15f, aSustain = 0.0f, aRelease = 0.18f,
-        masterNorm = 0.88f
-    ),
-    SynthPreset(
-        name = "7. Cosmic Analog Pad",
-        osc1Vol = 0.75f, osc1Tune = 0.50f, osc1Wave = 0,
-        osc2Vol = 0.65f, osc2Tune = 0.25f, osc2Wave = 1,
-        osc3Vol = 0.60f, osc3Tune = 0.645f, osc3Wave = 2,
-        cutoffNorm = 0.52f, resNorm = 0.26f, envAmtNorm = 0.42f,
-        fAttack = 0.35f, fDecay = 0.55f, fSustain = 0.65f, fRelease = 0.65f,
-        lfoRateNorm = 0.12f, lfoDepthNorm = 0.12f,
-        delayTimeNorm = 0.55f, delayFbNorm = 0.55f, delayMixNorm = 0.38f,
-        aAttack = 0.30f, aDecay = 0.50f, aSustain = 0.80f, aRelease = 0.70f,
-        masterNorm = 0.82f
-    ),
-    SynthPreset(
-        name = "8. Sci-Fi Filter Sweep",
-        osc1Vol = 0.80f, osc1Tune = 0.50f, osc1Wave = 0,
-        osc2Vol = 0.80f, osc2Tune = 0.25f, osc2Wave = 1,
-        osc3Vol = 0.70f, osc3Tune = 0.645f, osc3Wave = 0,
-        cutoffNorm = 0.48f, resNorm = 0.62f, envAmtNorm = 0.55f,
-        fAttack = 0.08f, fDecay = 0.40f, fSustain = 0.40f, fRelease = 0.50f,
-        lfoRateNorm = 0.40f, lfoDepthNorm = 0.50f,
-        delayTimeNorm = 0.45f, delayFbNorm = 0.60f, delayMixNorm = 0.40f,
-        aAttack = 0.02f, aDecay = 0.40f, aSustain = 0.80f, aRelease = 0.55f,
-        masterNorm = 0.82f
     )
 )
 
@@ -169,20 +120,16 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("moog_midi_slots_prefs", Context.MODE_PRIVATE) }
 
-    // Estados dos Osciladores
     var osc1Vol by remember { mutableStateOf(0.75f) }
     var osc1Tune by remember { mutableStateOf(0.5f) }
     var osc1Wave by remember { mutableStateOf(0) }
-
     var osc2Vol by remember { mutableStateOf(0.55f) }
     var osc2Tune by remember { mutableStateOf(0.25f) }
     var osc2Wave by remember { mutableStateOf(1) }
-
     var osc3Vol by remember { mutableStateOf(0.45f) }
     var osc3Tune by remember { mutableStateOf(0.645f) }
     var osc3Wave by remember { mutableStateOf(2) }
 
-    // Estados do Filtro VCF
     var cutoffNorm by remember { mutableStateOf(0.65f) }
     var resNorm by remember { mutableStateOf(0.25f) }
     var envAmtNorm by remember { mutableStateOf(0.5f) }
@@ -191,33 +138,29 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
     var fSustain by remember { mutableStateOf(0.2f) }
     var fRelease by remember { mutableStateOf(0.3f) }
 
-    // Estados LFO & Tape Delay
     var lfoRateNorm by remember { mutableStateOf(0.25f) }
     var lfoDepthNorm by remember { mutableStateOf(0.0f) }
     var delayTimeNorm by remember { mutableStateOf(0.35f) }
     var delayFbNorm by remember { mutableStateOf(0.4f) }
     var delayMixNorm by remember { mutableStateOf(0.2f) }
 
-    // Estados VCA & Master
     var aAttack by remember { mutableStateOf(0.02f) }
     var aDecay by remember { mutableStateOf(0.3f) }
     var aSustain by remember { mutableStateOf(0.7f) }
     var aRelease by remember { mutableStateOf(0.3f) }
     var masterNorm by remember { mutableStateOf(0.85f) }
 
-    // --- ESTADOS DA JANELA DE ÁUDIO & DSP (QUALIDADE ORGÂNICA E PERFORMANCE) ---
     var showAudioSettingsDialog by remember { mutableStateOf(false) }
-    var oversamplingFactor by remember { mutableStateOf(2) }     // 1x, 2x, 4x
-    var analogDrift by remember { mutableStateOf(0.35f) }         // 0..1
-    var filterDrive by remember { mutableStateOf(0.25f) }         // 0..1
-    var filterKeyTrack by remember { mutableStateOf(0.50f) }      // 0..1
-    var stereoSpread by remember { mutableStateOf(0.45f) }        // 0..1
-    var velocitySens by remember { mutableStateOf(0.35f) }        // 0..1
-    var maxPolyphony by remember { mutableStateOf(16) }           // 4, 8, 12, 16
-    var bufferBurstMult by remember { mutableStateOf(2) }         // 1, 2, 4
+    var oversamplingFactor by remember { mutableStateOf(2) }
+    var analogDrift by remember { mutableStateOf(0.35f) }
+    var filterDrive by remember { mutableStateOf(0.25f) }
+    var filterKeyTrack by remember { mutableStateOf(0.50f) }
+    var stereoSpread by remember { mutableStateOf(0.45f) }
+    var velocitySens by remember { mutableStateOf(0.35f) }
+    var maxPolyphony by remember { mutableStateOf(16) }
+    var bufferBurstMult by remember { mutableStateOf(2) }
     var paramSmoothing by remember { mutableStateOf(true) }
 
-    // Telemetria em tempo real vinda do C++ Oboe
     val engineStatsBuffer = remember { FloatArray(7) }
     var statSampleRate by remember { mutableStateOf(48000) }
     var statBurstFrames by remember { mutableStateOf(192) }
@@ -257,16 +200,13 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
         val maxHz = 12000f
         return exp(norm * (ln(maxHz) - ln(minHz)) + ln(minHz))
     }
-
     fun normToSemitones(norm: Float): Float = ((norm * 48f) - 24f).roundToInt().toFloat()
 
-    // --- 1. GERENCIADOR DE PRESETS DE TIMBRES (COM SAVE EXPLÍCITO) ---
     val presetsList = remember { mutableStateListOf<SynthPreset>() }
     var currentPresetId by remember { mutableStateOf("") }
     var isPresetDirty by remember { mutableStateOf(false) }
     var isPresetDropdownExpanded by remember { mutableStateOf(false) }
 
-    // --- 2. GERENCIADOR DE SLOTS MIDI LEARN (AUTO-SAVE) ---
     var isMidiLearnMode by remember { mutableStateOf(false) }
     var selectedParamForLearn by remember { mutableStateOf<String?>(null) }
     val paramToCCMap = remember { mutableStateMapOf<String, Int>() }
@@ -274,7 +214,6 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
     var currentSlotId by remember { mutableStateOf("") }
     var isSlotDropdownExpanded by remember { mutableStateOf(false) }
 
-    // Estado da caixa de diálogo compartilhada
     var showNameDialog by remember { mutableStateOf(false) }
     var dialogTargetIsPreset by remember { mutableStateOf(true) }
     var isCreatingNewItem by remember { mutableStateOf(false) }
@@ -389,9 +328,7 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
         saveSlotsToDisk(midiSlots, currentSlotId)
     }
 
-    // Inicialização ao abrir o aplicativo
     LaunchedEffect(Unit) {
-        // Carrega configurações de Áudio & DSP salvas
         val rawDspJson = prefs.getString("saved_engine_dsp_settings_json", null)
         if (rawDspJson != null) {
             try {
@@ -405,9 +342,7 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
                 maxPolyphony = o.optInt("maxPolyphony", 16)
                 bufferBurstMult = o.optInt("bufferBurstMult", 2)
                 paramSmoothing = o.optBoolean("paramSmoothing", true)
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
+            } catch (e: Exception) {}
         }
         applyEngineSettingsToNative()
 
@@ -425,23 +360,16 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
                     val mapObj = obj.getJSONObject("mappings")
                     val map = mutableMapOf<String, Int>()
                     val keys = mapObj.keys()
-                    while (keys.hasNext()) {
-                        val k = keys.next()
-                        map[k] = mapObj.getInt(k)
-                    }
+                    while (keys.hasNext()) { map[keys.next()] = mapObj.getInt(keys.next()) }
                     loaded.add(MidiMappingSlot(id, name, map))
                 }
                 if (loaded.isNotEmpty()) {
-                    midiSlots.clear()
-                    midiSlots.addAll(loaded)
+                    midiSlots.clear(); midiSlots.addAll(loaded)
                     val active = loaded.find { it.id == savedActiveId } ?: loaded.first()
                     currentSlotId = active.id
-                    paramToCCMap.clear()
-                    paramToCCMap.putAll(active.mappings)
+                    paramToCCMap.clear(); paramToCCMap.putAll(active.mappings)
                 }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
+            } catch (e: Exception) {}
         }
         if (midiSlots.isEmpty()) {
             val defaultSlot = MidiMappingSlot(name = "Launchkey MK4", mappings = emptyMap())
@@ -461,8 +389,7 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
                     val o = arr.getJSONObject(i)
                     loadedPresets.add(
                         SynthPreset(
-                            id = o.getString("id"),
-                            name = o.getString("name"),
+                            id = o.getString("id"), name = o.getString("name"),
                             osc1Vol = o.getDouble("osc1Vol").toFloat(), osc1Tune = o.getDouble("osc1Tune").toFloat(), osc1Wave = o.getInt("osc1Wave"),
                             osc2Vol = o.getDouble("osc2Vol").toFloat(), osc2Tune = o.getDouble("osc2Tune").toFloat(), osc2Wave = o.getInt("osc2Wave"),
                             osc3Vol = o.getDouble("osc3Vol").toFloat(), osc3Tune = o.getDouble("osc3Tune").toFloat(), osc3Wave = o.getInt("osc3Wave"),
@@ -476,19 +403,15 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
                     )
                 }
                 if (loadedPresets.isNotEmpty()) {
-                    presetsList.clear()
-                    presetsList.addAll(loadedPresets)
+                    presetsList.clear(); presetsList.addAll(loadedPresets)
                     val activePreset = loadedPresets.find { it.id == savedActivePresetId } ?: loadedPresets.first()
                     applyPresetToEngine(activePreset)
                 }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
+            } catch (e: Exception) {}
         }
         if (presetsList.isEmpty()) {
             val factory = getFactoryPresets()
-            presetsList.addAll(factory)
-            applyPresetToEngine(factory.first())
+            presetsList.addAll(factory); applyPresetToEngine(factory.first())
         }
     }
 
@@ -536,13 +459,10 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
                 paramToCCMap[targetParam] = event.cc
                 updateParamById(targetParam, norm)
                 syncCurrentMapToActiveSlot()
-
                 selectedParamForLearn = null
             } else {
                 paramToCCMap.forEach { (paramId, mappedCC) ->
-                    if (mappedCC == event.cc) {
-                        updateParamById(paramId, norm)
-                    }
+                    if (mappedCC == event.cc) updateParamById(paramId, norm)
                 }
             }
         }
@@ -551,26 +471,13 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
     @Composable
     fun SmartKnob(paramId: String, label: String, valueText: String, value: Float) {
         KnobControl(
-            label = label,
-            valueText = valueText,
-            value = value,
+            label = label, valueText = valueText, value = value,
             isLearningSelected = (isMidiLearnMode && selectedParamForLearn == paramId),
             mappedCC = if (isMidiLearnMode) paramToCCMap[paramId] else null,
-            onUnmap = {
-                paramToCCMap.remove(paramId)
-                syncCurrentMapToActiveSlot()
-            },
-            onKnobClick = {
-                if (isMidiLearnMode) {
-                    selectedParamForLearn = paramId
-                }
-            },
+            onUnmap = { paramToCCMap.remove(paramId); syncCurrentMapToActiveSlot() },
+            onKnobClick = { if (isMidiLearnMode) selectedParamForLearn = paramId },
             onValueChange = { newVal ->
-                if (isMidiLearnMode) {
-                    selectedParamForLearn = paramId
-                } else {
-                    updateParamById(paramId, newVal)
-                }
+                if (isMidiLearnMode) selectedParamForLearn = paramId else updateParamById(paramId, newVal)
             }
         )
     }
@@ -597,11 +504,11 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
         }
     }
 
-    // --- JANELA MODAL: CONFIGURAÇÕES DE ÁUDIO, QUALIDADE ORGÂNICA & PERFORMANCE OBOE ---
     if (showAudioSettingsDialog) {
         AlertDialog(
             onDismissRequest = { showAudioSettingsDialog = false },
             containerColor = Color(0xFF14171C),
+            modifier = Modifier.fillMaxWidth(0.9f),
             titleContentColor = Color.White,
             textContentColor = Color.LightGray,
             title = {
@@ -610,7 +517,8 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column {
+                    // CORREÇÃO DA UI: A coluna com weight(1f) evita que o título expulse o botão
+                    Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
                         Text(
                             text = "⚙️ MOTOR DE ÁUDIO & QUALIDADE ANALÓGICA",
                             color = Color(0xFFF59E0B),
@@ -620,7 +528,8 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
                         Text(
                             text = "Calibração Acústica Moog + Performance de Baixa Latência Oboe",
                             color = Color(0xFF94A3B8),
-                            fontSize = 11.sp
+                            fontSize = 11.sp,
+                            lineHeight = 14.sp
                         )
                     }
                     Box(
@@ -628,19 +537,13 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
                             .background(Color(0xFF1E293B), RoundedCornerShape(6.dp))
                             .border(1.dp, Color(0xFF334155), RoundedCornerShape(6.dp))
                             .clickable {
-                                oversamplingFactor = 2
-                                analogDrift = 0.35f
-                                filterDrive = 0.25f
-                                filterKeyTrack = 0.50f
-                                stereoSpread = 0.45f
-                                velocitySens = 0.35f
-                                maxPolyphony = 16
-                                bufferBurstMult = 2
-                                paramSmoothing = true
+                                oversamplingFactor = 2; analogDrift = 0.35f; filterDrive = 0.25f
+                                filterKeyTrack = 0.50f; stereoSpread = 0.45f; velocitySens = 0.35f
+                                maxPolyphony = 16; bufferBurstMult = 2; paramSmoothing = true
                                 applyEngineSettingsToNative()
                                 saveEngineSettingsToDisk()
                             }
-                            .padding(horizontal = 8.dp, vertical = 5.dp)
+                            .padding(horizontal = 8.dp, vertical = 6.dp)
                     ) {
                         Text("↺ PADRÃO STUDIO", color = Color(0xFF38BDF8), fontSize = 10.sp, fontWeight = FontWeight.Bold)
                     }
@@ -650,11 +553,10 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(max = 420.dp)
+                        .heightIn(max = 400.dp) // Reduzido para caber melhor na tela horizontal Dex
                         .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    // Painel de Telemetria em Tempo Real
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -664,294 +566,67 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         TelemetryBadge("SAMPLE RATE", "${statSampleRate} Hz", Color(0xFF10B981))
-                        TelemetryBadge("DSP INTERNO", "${(statSampleRate * oversamplingFactor) / 1000} kHz (${oversamplingFactor}x)", Color(0xFFF59E0B))
-                        TelemetryBadge("LATÊNCIA OBOE", "${"%.1f".format(statLatencyMs)} ms (${statBufferFrames}f)", Color(0xFF38BDF8))
+                        TelemetryBadge("DSP INTERNO", "${(statSampleRate * oversamplingFactor) / 1000} kHz", Color(0xFFF59E0B))
+                        TelemetryBadge("LATÊNCIA OBOE", "${"%.1f".format(statLatencyMs)} ms", Color(0xFF38BDF8))
                         TelemetryBadge("VOZES ATIVAS", "$statActiveVoices / $maxPolyphony", Color(0xFFE2E8F0))
-                        TelemetryBadge(
-                            "FALHAS (XRUNS)",
-                            "$statXRuns",
-                            if (statXRuns == 0) Color(0xFF10B981) else Color(0xFFEF4444)
-                        )
+                        TelemetryBadge("FALHAS", "$statXRuns", if (statXRuns == 0) Color(0xFF10B981) else Color(0xFFEF4444))
                     }
 
-                    // SEÇÃO 1: QUALIDADE DSP & CARÁTER ANALÓGICO
-                    Text(
-                        text = "1. CARÁTER ANALÓGICO & MODELAGEM FÍSICA",
-                        color = Color(0xFFF59E0B),
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-
-                    // Seletor de Oversampling
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(Color(0xFF1C2026), RoundedCornerShape(8.dp))
-                            .padding(10.dp)
-                    ) {
-                        Text(
-                            text = "OVERSAMPLING DO FILTRO MOOG LADDER (ANTI-ALIASING)",
-                            color = Color.White,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "Aumenta a resolução interna das saturações de transistor para eliminar aspereza digital nos agudos.",
-                            color = Color(0xFF94A3B8),
-                            fontSize = 10.sp
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
+                    Text("1. CARÁTER ANALÓGICO & MODELAGEM FÍSICA", color = Color(0xFFF59E0B), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Column(modifier = Modifier.fillMaxWidth().background(Color(0xFF1C2026), RoundedCornerShape(8.dp)).padding(10.dp)) {
+                        Text("OVERSAMPLING DO FILTRO MOOG LADDER", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(6.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            val osOptions = listOf(
-                                1 to "1x (Eco / Leve)",
-                                2 to "2x (Studio HD)",
-                                4 to "4x (Ultra Analog)"
-                            )
-                            osOptions.forEach { (factor, title) ->
+                            listOf(1 to "1x (Eco / Leve)", 2 to "2x (Studio HD)", 4 to "4x (Ultra Analog)").forEach { (factor, title) ->
                                 val selected = (oversamplingFactor == factor)
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .background(
-                                            if (selected) Color(0xFFF59E0B) else Color(0xFF0F1115),
-                                            RoundedCornerShape(6.dp)
-                                        )
-                                        .border(
-                                            1.dp,
-                                            if (selected) Color(0xFFFDE047) else Color(0xFF334155),
-                                            RoundedCornerShape(6.dp)
-                                        )
-                                        .clickable {
-                                            oversamplingFactor = factor
-                                            audioEngine.setOversampling(factor)
-                                            saveEngineSettingsToDisk()
-                                        }
-                                        .padding(vertical = 8.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = title,
-                                        color = if (selected) Color.Black else Color.LightGray,
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
+                                Box(modifier = Modifier.weight(1f).background(if (selected) Color(0xFFF59E0B) else Color(0xFF0F1115), RoundedCornerShape(6.dp)).border(1.dp, if (selected) Color(0xFFFDE047) else Color(0xFF334155), RoundedCornerShape(6.dp)).clickable { oversamplingFactor = factor; audioEngine.setOversampling(factor); saveEngineSettingsToDisk() }.padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
+                                    Text(title, color = if (selected) Color.Black else Color.LightGray, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                                 }
                             }
                         }
                     }
 
-                    // Sliders de Modelagem Orgânica
-                    DspSliderRow(
-                        title = "ANALOG DRIFT (INSTABILIDADE TÉRMICA VCO/VCF)",
-                        subtitle = "Micro-flutuações orgânicas de afinação e fase livre entre as vozes",
-                        value = analogDrift,
-                        valueLabel = "${(analogDrift * 100).toInt()}%",
-                        onValueChange = {
-                            analogDrift = it
-                            audioEngine.setAnalogDrift(it)
-                            saveEngineSettingsToDisk()
-                        }
-                    )
-
-                    DspSliderRow(
-                        title = "FILTER DRIVE (SATURAÇÃO DOS TRANSISTORES)",
-                        subtitle = "Calor harmônico e compressão natural na entrada do filtro Moog 24dB",
-                        value = filterDrive,
-                        valueLabel = "${(filterDrive * 100).toInt()}%",
-                        onValueChange = {
-                            filterDrive = it
-                            audioEngine.setFilterDrive(it)
-                            saveEngineSettingsToDisk()
-                        }
-                    )
-
-                    DspSliderRow(
-                        title = "KEYBOARD TRACKING DO FILTRO (1V/OCT)",
-                        subtitle = "Faz o ponto de corte do filtro acompanhar as notas mais agudas do teclado",
-                        value = filterKeyTrack,
-                        valueLabel = "${(filterKeyTrack * 100).toInt()}%",
-                        onValueChange = {
-                            filterKeyTrack = it
-                            audioEngine.setFilterKeyTrack(it)
-                            saveEngineSettingsToDisk()
-                        }
-                    )
-
-                    DspSliderRow(
-                        title = "ABERTURA ESTÉREO & TAPE WOW/FLUTTER",
-                        subtitle = "Espacialização estéreo entre vozes e modulação mecânica de fita no Delay",
-                        value = stereoSpread,
-                        valueLabel = "${(stereoSpread * 100).toInt()}%",
-                        onValueChange = {
-                            stereoSpread = it
-                            audioEngine.setStereoSpread(it)
-                            saveEngineSettingsToDisk()
-                        }
-                    )
-
-                    DspSliderRow(
-                        title = "SENSIBILIDADE AO VELOCITY MIDI",
-                        subtitle = "Controla o quanto a força nas teclas afeta o volume e o brilho do filtro",
-                        value = velocitySens,
-                        valueLabel = "${(velocitySens * 100).toInt()}%",
-                        onValueChange = {
-                            velocitySens = it
-                            audioEngine.setVelocitySensitivity(it)
-                            saveEngineSettingsToDisk()
-                        }
-                    )
+                    DspSliderRow("ANALOG DRIFT (INSTABILIDADE VCO/VCF)", "Micro-flutuações orgânicas", analogDrift, "${(analogDrift * 100).toInt()}%") { analogDrift = it; audioEngine.setAnalogDrift(it); saveEngineSettingsToDisk() }
+                    DspSliderRow("FILTER DRIVE (SATURAÇÃO)", "Calor harmônico de entrada", filterDrive, "${(filterDrive * 100).toInt()}%") { filterDrive = it; audioEngine.setFilterDrive(it); saveEngineSettingsToDisk() }
+                    DspSliderRow("KEYBOARD TRACKING (1V/OCT)", "Filtro acompanha as notas agudas", filterKeyTrack, "${(filterKeyTrack * 100).toInt()}%") { filterKeyTrack = it; audioEngine.setFilterKeyTrack(it); saveEngineSettingsToDisk() }
+                    DspSliderRow("ABERTURA ESTÉREO & TAPE WOW", "Espacialização e fita do Delay", stereoSpread, "${(stereoSpread * 100).toInt()}%") { stereoSpread = it; audioEngine.setStereoSpread(it); saveEngineSettingsToDisk() }
+                    DspSliderRow("SENSIBILIDADE AO VELOCITY MIDI", "Força nas teclas afeta volume/brilho", velocitySens, "${(velocitySens * 100).toInt()}%") { velocitySens = it; audioEngine.setVelocitySensitivity(it); saveEngineSettingsToDisk() }
 
                     Spacer(modifier = Modifier.height(4.dp))
+                    Text("2. PERFORMANCE DE HARDWARE & BUFFER OBOE", color = Color(0xFF38BDF8), fontSize = 12.sp, fontWeight = FontWeight.Bold)
 
-                    // SEÇÃO 2: PERFORMANCE & HARDWARE OBOE
-                    Text(
-                        text = "2. PERFORMANCE DE HARDWARE & BUFFER OBOE",
-                        color = Color(0xFF38BDF8),
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-
-                    // Seletor de Buffer / Latência
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(Color(0xFF1C2026), RoundedCornerShape(8.dp))
-                            .padding(10.dp)
-                    ) {
-                        Text(
-                            text = "PERFIL DE BUFFER DE ÁUDIO (LATÊNCIA VS. ESTABILIDADE)",
-                            color = Color.White,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "Se ouvir estalos (XRuns) ao usar 4x Oversampling no DeX, escolha Equilibrado ou Estável.",
-                            color = Color(0xFF94A3B8),
-                            fontSize = 10.sp
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
+                    Column(modifier = Modifier.fillMaxWidth().background(Color(0xFF1C2026), RoundedCornerShape(8.dp)).padding(10.dp)) {
+                        Text("PERFIL DE BUFFER DE ÁUDIO", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(6.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            val bufOptions = listOf(
-                                1 to "Ultra-Baixa (1x Burst)",
-                                2 to "Equilibrada (2x Burst)",
-                                4 to "Estável (4x Burst)"
-                            )
-                            bufOptions.forEach { (mult, label) ->
+                            listOf(1 to "Ultra-Baixa", 2 to "Equilibrada", 4 to "Estável").forEach { (mult, label) ->
                                 val selected = (bufferBurstMult == mult)
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .background(
-                                            if (selected) Color(0xFF0284C7) else Color(0xFF0F1115),
-                                            RoundedCornerShape(6.dp)
-                                        )
-                                        .border(
-                                            1.dp,
-                                            if (selected) Color(0xFF7DD3FC) else Color(0xFF334155),
-                                            RoundedCornerShape(6.dp)
-                                        )
-                                        .clickable {
-                                            bufferBurstMult = mult
-                                            audioEngine.setBufferBurstMultiplier(mult)
-                                            saveEngineSettingsToDisk()
-                                        }
-                                        .padding(vertical = 8.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = label,
-                                        color = Color.White,
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
+                                Box(modifier = Modifier.weight(1f).background(if (selected) Color(0xFF0284C7) else Color(0xFF0F1115), RoundedCornerShape(6.dp)).border(1.dp, if (selected) Color(0xFF7DD3FC) else Color(0xFF334155), RoundedCornerShape(6.dp)).clickable { bufferBurstMult = mult; audioEngine.setBufferBurstMultiplier(mult); saveEngineSettingsToDisk() }.padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
+                                    Text(label, color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                                 }
                             }
                         }
                     }
 
-                    // Seletor de Limite de Polifonia
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(Color(0xFF1C2026), RoundedCornerShape(8.dp))
-                            .padding(10.dp)
-                    ) {
-                        Text(
-                            text = "LIMITE DE POLIFONIA (VOZES SIMULTÂNEAS)",
-                            color = Color.White,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
+                    Column(modifier = Modifier.fillMaxWidth().background(Color(0xFF1C2026), RoundedCornerShape(8.dp)).padding(10.dp)) {
+                        Text("LIMITE DE POLIFONIA", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(6.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             listOf(4, 8, 12, 16).forEach { voicesCount ->
                                 val selected = (maxPolyphony == voicesCount)
-                                val label = if (voicesCount == 4) "4 (Poly-D Real)" else "$voicesCount Vozes"
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .background(
-                                            if (selected) Color(0xFF0284C7) else Color(0xFF0F1115),
-                                            RoundedCornerShape(6.dp)
-                                        )
-                                        .border(
-                                            1.dp,
-                                            if (selected) Color(0xFF7DD3FC) else Color(0xFF334155),
-                                            RoundedCornerShape(6.dp)
-                                        )
-                                        .clickable {
-                                            maxPolyphony = voicesCount
-                                            audioEngine.setMaxPolyphony(voicesCount)
-                                            saveEngineSettingsToDisk()
-                                        }
-                                        .padding(vertical = 8.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = label,
-                                        color = Color.White,
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
+                                Box(modifier = Modifier.weight(1f).background(if (selected) Color(0xFF0284C7) else Color(0xFF0F1115), RoundedCornerShape(6.dp)).border(1.dp, if (selected) Color(0xFF7DD3FC) else Color(0xFF334155), RoundedCornerShape(6.dp)).clickable { maxPolyphony = voicesCount; audioEngine.setMaxPolyphony(voicesCount); saveEngineSettingsToDisk() }.padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
+                                    Text(if (voicesCount == 4) "4 (Poly-D Real)" else "$voicesCount Vozes", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                                 }
                             }
                         }
                     }
 
-                    // Switch de Suavização Anti-Zipper
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(Color(0xFF1C2026), RoundedCornerShape(8.dp))
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                    Row(modifier = Modifier.fillMaxWidth().background(Color(0xFF1C2026), RoundedCornerShape(8.dp)).padding(horizontal = 12.dp, vertical = 8.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "SUAVIZAÇÃO ANALÓGICA DE KNOBS (ANTI-ZIPPER)",
-                                color = Color.White,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = "Elimina degraus digitais ao girar o Cutoff rapidamente via controlador MIDI CC.",
-                                color = Color(0xFF94A3B8),
-                                fontSize = 10.sp
-                            )
+                            Text("SUAVIZAÇÃO DE KNOBS (ANTI-ZIPPER)", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Text("Elimina degraus digitais no Cutoff via MIDI CC.", color = Color(0xFF94A3B8), fontSize = 10.sp)
                         }
-                        Switch(
-                            checked = paramSmoothing,
-                            onCheckedChange = {
-                                paramSmoothing = it
-                                audioEngine.setParameterSmoothing(it)
-                                saveEngineSettingsToDisk()
-                            },
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = Color(0xFFF59E0B),
-                                checkedTrackColor = Color(0xFF78350F)
-                            )
-                        )
+                        Switch(checked = paramSmoothing, onCheckedChange = { paramSmoothing = it; audioEngine.setParameterSmoothing(it); saveEngineSettingsToDisk() }, colors = SwitchDefaults.colors(checkedThumbColor = Color(0xFFF59E0B), checkedTrackColor = Color(0xFF78350F)))
                     }
                 }
             },
@@ -984,531 +659,166 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
             text = {
                 Column {
                     Text(
-                        text = if (dialogTargetIsPreset)
-                            "Digite o nome do Timbre/Patch:"
-                        else
-                            "Digite o nome do controlador ou perfil MIDI (ex: Launchkey MK4):",
-                        fontSize = 12.sp,
-                        color = Color(0xFF94A3B8)
+                        text = if (dialogTargetIsPreset) "Digite o nome do Timbre/Patch:" else "Digite o nome do controlador ou perfil MIDI (ex: Launchkey MK4):",
+                        fontSize = 12.sp, color = Color(0xFF94A3B8)
                     )
                     Spacer(modifier = Modifier.height(10.dp))
                     OutlinedTextField(
-                        value = nameInputText,
-                        onValueChange = { nameInputText = it },
-                        singleLine = true,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White,
-                            focusedBorderColor = Color(0xFFF59E0B),
-                            unfocusedBorderColor = Color(0xFF334155),
-                            cursorColor = Color(0xFFF59E0B)
-                        )
+                        value = nameInputText, onValueChange = { nameInputText = it }, singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedBorderColor = Color(0xFFF59E0B), unfocusedBorderColor = Color(0xFF334155), cursorColor = Color(0xFFF59E0B))
                     )
                 }
             },
             confirmButton = {
                 TextButton(
                     onClick = {
-                        val finalName = nameInputText.trim().ifEmpty {
-                            if (dialogTargetIsPreset) "Custom Patch" else "Controlador MIDI"
-                        }
+                        val finalName = nameInputText.trim().ifEmpty { if (dialogTargetIsPreset) "Custom Patch" else "Controlador MIDI" }
                         if (dialogTargetIsPreset) {
                             if (isCreatingNewItem) {
                                 val newPreset = SynthPreset(
-                                    name = finalName,
-                                    osc1Vol = osc1Vol, osc1Tune = osc1Tune, osc1Wave = osc1Wave,
-                                    osc2Vol = osc2Vol, osc2Tune = osc2Tune, osc2Wave = osc2Wave,
-                                    osc3Vol = osc3Vol, osc3Tune = osc3Tune, osc3Wave = osc3Wave,
-                                    cutoffNorm = cutoffNorm, resNorm = resNorm, envAmtNorm = envAmtNorm,
-                                    fAttack = fAttack, fDecay = fDecay, fSustain = fSustain, fRelease = fRelease,
-                                    lfoRateNorm = lfoRateNorm, lfoDepthNorm = lfoDepthNorm,
-                                    delayTimeNorm = delayTimeNorm, delayFbNorm = delayFbNorm, delayMixNorm = delayMixNorm,
-                                    aAttack = aAttack, aDecay = aDecay, aSustain = aSustain, aRelease = aRelease,
-                                    masterNorm = masterNorm
+                                    name = finalName, osc1Vol = osc1Vol, osc1Tune = osc1Tune, osc1Wave = osc1Wave, osc2Vol = osc2Vol, osc2Tune = osc2Tune, osc2Wave = osc2Wave, osc3Vol = osc3Vol, osc3Tune = osc3Tune, osc3Wave = osc3Wave,
+                                    cutoffNorm = cutoffNorm, resNorm = resNorm, envAmtNorm = envAmtNorm, fAttack = fAttack, fDecay = fDecay, fSustain = fSustain, fRelease = fRelease, lfoRateNorm = lfoRateNorm, lfoDepthNorm = lfoDepthNorm,
+                                    delayTimeNorm = delayTimeNorm, delayFbNorm = delayFbNorm, delayMixNorm = delayMixNorm, aAttack = aAttack, aDecay = aDecay, aSustain = aSustain, aRelease = aRelease, masterNorm = masterNorm
                                 )
-                                presetsList.add(newPreset)
-                                applyPresetToEngine(newPreset)
+                                presetsList.add(newPreset); applyPresetToEngine(newPreset)
                             } else {
                                 val idx = presetsList.indexOfFirst { it.id == currentPresetId }
-                                if (idx != -1) {
-                                    presetsList[idx] = presetsList[idx].copy(name = finalName)
-                                    savePresetsToDisk(presetsList, currentPresetId)
-                                }
+                                if (idx != -1) { presetsList[idx] = presetsList[idx].copy(name = finalName); savePresetsToDisk(presetsList, currentPresetId) }
                             }
                         } else {
                             if (isCreatingNewItem) {
                                 val newSlot = MidiMappingSlot(name = finalName, mappings = emptyMap())
-                                midiSlots.add(newSlot)
-                                selectSlot(newSlot)
+                                midiSlots.add(newSlot); selectSlot(newSlot)
                             } else {
                                 val idx = midiSlots.indexOfFirst { it.id == currentSlotId }
-                                if (idx != -1) {
-                                    midiSlots[idx] = midiSlots[idx].copy(name = finalName)
-                                    saveSlotsToDisk(midiSlots, currentSlotId)
-                                }
+                                if (idx != -1) { midiSlots[idx] = midiSlots[idx].copy(name = finalName); saveSlotsToDisk(midiSlots, currentSlotId) }
                             }
                         }
                         showNameDialog = false
                     }
-                ) {
-                    Text("SALVAR", color = Color(0xFFF59E0B), fontWeight = FontWeight.Bold)
-                }
+                ) { Text("SALVAR", color = Color(0xFFF59E0B), fontWeight = FontWeight.Bold) }
             },
             dismissButton = {
-                TextButton(onClick = { showNameDialog = false }) {
-                    Text("CANCELAR", color = Color.Gray)
-                }
+                TextButton(onClick = { showNameDialog = false }) { Text("CANCELAR", color = Color.Gray) }
             }
         )
     }
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color(0xFF0F1115))
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
+        modifier = Modifier.fillMaxSize().background(Color(0xFF0F1115)).verticalScroll(rememberScrollState()).padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Barra Superior
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
-                .padding(bottom = 16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(bottom = 16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.padding(end = 12.dp)) {
-                Text(
-                    text = "MOOG POLY-D NATIVE",
-                    color = Color(0xFFF59E0B),
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.Bold
-                )
+                Text("MOOG POLY-D NATIVE", color = Color(0xFFF59E0B), fontSize = 17.sp, fontWeight = FontWeight.Bold)
                 Text(
                     text = if (isMidiLearnMode) {
-                        if (selectedParamForLearn == null) "MIDI LEARN [$currentSlotName]: Toque num Knob..."
-                        else "GIRAR HARDWARE -> [$selectedParamForLearn]"
+                        if (selectedParamForLearn == null) "MIDI LEARN [$currentSlotName]: Toque num Knob..." else "GIRAR HARDWARE -> [$selectedParamForLearn]"
                     } else if (isPresetDirty) {
-                        "TIMBRE EDITADO (Não Salvo) | Clique em SALVAR ou recarregue na lista"
+                        "TIMBRE EDITADO (Não Salvo) | Clique em SALVAR"
                     } else {
-                        "TIMBRE: $currentPresetName | DSP: ${oversamplingFactor}x OS • ${"%.1f".format(statLatencyMs)}ms"
+                        "TIMBRE: $currentPresetName | DSP: ${oversamplingFactor}x OS"
                     },
-                    color = if (isMidiLearnMode || isPresetDirty) Color(0xFFFBBF24) else Color(0xFF94A3B8),
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold
+                    color = if (isMidiLearnMode || isPresetDirty) Color(0xFFFBBF24) else Color(0xFF94A3B8), fontSize = 10.sp, fontWeight = FontWeight.Bold
                 )
             }
 
             OscilloscopeView(waveform = waveformBuffer, trigger = frameTrigger)
-
             Spacer(modifier = Modifier.width(10.dp))
 
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // --- BOTÃO DO NOVO SUBMENU: ÁUDIO & DSP ---
-                Box(
-                    modifier = Modifier
-                        .background(Color(0xFF181B20), RoundedCornerShape(6.dp))
-                        .border(1.dp, Color(0xFF10B981).copy(alpha = 0.7f), RoundedCornerShape(6.dp))
-                        .clickable { showAudioSettingsDialog = true }
-                        .padding(horizontal = 11.dp, vertical = 8.dp)
-                ) {
-                    Text(
-                        text = "⚙️ ÁUDIO & DSP (${oversamplingFactor}x)",
-                        color = Color(0xFF10B981),
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.ExtraBold
-                    )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(modifier = Modifier.background(Color(0xFF181B20), RoundedCornerShape(6.dp)).border(1.dp, Color(0xFF10B981).copy(alpha = 0.7f), RoundedCornerShape(6.dp)).clickable { showAudioSettingsDialog = true }.padding(horizontal = 11.dp, vertical = 8.dp)) {
+                    Text("⚙️ ÁUDIO & DSP (${oversamplingFactor}x)", color = Color(0xFF10B981), fontSize = 11.sp, fontWeight = FontWeight.ExtraBold)
                 }
-
-                // --- 1. SELETOR DE PRESETS + BOTÃO EXPLÍCITO "SALVAR" ---
                 Box {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .background(Color(0xFF181B20), RoundedCornerShape(6.dp))
-                            .border(
-                                1.dp,
-                                if (isPresetDirty) Color(0xFFFDE047) else Color(0xFFF59E0B).copy(alpha = 0.6f),
-                                RoundedCornerShape(6.dp)
-                            )
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .clickable { isPresetDropdownExpanded = true }
-                                .padding(horizontal = 10.dp, vertical = 8.dp)
-                        ) {
-                            Text(
-                                text = "🎹 $currentPresetName" + if (isPresetDirty) " *" else "",
-                                color = if (isPresetDirty) Color(0xFFFDE047) else Color(0xFFF59E0B),
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold
-                            )
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.background(Color(0xFF181B20), RoundedCornerShape(6.dp)).border(1.dp, if (isPresetDirty) Color(0xFFFDE047) else Color(0xFFF59E0B).copy(alpha = 0.6f), RoundedCornerShape(6.dp))) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { isPresetDropdownExpanded = true }.padding(horizontal = 10.dp, vertical = 8.dp)) {
+                            Text("🎹 $currentPresetName" + if (isPresetDirty) " *" else "", color = if (isPresetDirty) Color(0xFFFDE047) else Color(0xFFF59E0B), fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             Spacer(modifier = Modifier.width(6.dp))
                             Text("▼", color = Color(0xFFF59E0B), fontSize = 10.sp)
                         }
-
                         Box(modifier = Modifier.width(1.dp).height(22.dp).background(Color(0xFF334155)))
-
-                        Box(
-                            modifier = Modifier
-                                .background(if (isPresetDirty) Color(0xFFD97706) else Color.Transparent)
-                                .clickable { saveCurrentStateToActivePresetExplicitly() }
-                                .padding(horizontal = 9.dp, vertical = 8.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "💾 SALVAR",
-                                color = if (isPresetDirty) Color.White else Color(0xFF94A3B8),
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.ExtraBold
-                            )
+                        Box(modifier = Modifier.background(if (isPresetDirty) Color(0xFFD97706) else Color.Transparent).clickable { saveCurrentStateToActivePresetExplicitly() }.padding(horizontal = 9.dp, vertical = 8.dp), contentAlignment = Alignment.Center) {
+                            Text("💾 SALVAR", color = if (isPresetDirty) Color.White else Color(0xFF94A3B8), fontSize = 10.sp, fontWeight = FontWeight.ExtraBold)
                         }
-
                         Box(modifier = Modifier.width(1.dp).height(22.dp).background(Color(0xFF334155)))
-
-                        Box(
-                            modifier = Modifier
-                                .clickable {
-                                    nameInputText = currentPresetName
-                                    dialogTargetIsPreset = true
-                                    isCreatingNewItem = false
-                                    showNameDialog = true
-                                }
-                                .padding(horizontal = 8.dp, vertical = 8.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
+                        Box(modifier = Modifier.clickable { nameInputText = currentPresetName; dialogTargetIsPreset = true; isCreatingNewItem = false; showNameDialog = true }.padding(horizontal = 8.dp, vertical = 8.dp), contentAlignment = Alignment.Center) {
                             Text("✎", color = Color(0xFFF59E0B), fontSize = 13.sp, fontWeight = FontWeight.Bold)
                         }
                     }
-
-                    DropdownMenu(
-                        expanded = isPresetDropdownExpanded,
-                        onDismissRequest = { isPresetDropdownExpanded = false },
-                        modifier = Modifier
-                            .background(Color(0xFF1E2229))
-                            .border(1.dp, Color(0xFFF59E0B).copy(alpha = 0.5f), RoundedCornerShape(6.dp))
-                            .width(275.dp)
-                    ) {
+                    DropdownMenu(expanded = isPresetDropdownExpanded, onDismissRequest = { isPresetDropdownExpanded = false }, modifier = Modifier.background(Color(0xFF1E2229)).border(1.dp, Color(0xFFF59E0B).copy(alpha = 0.5f), RoundedCornerShape(6.dp)).width(275.dp)) {
                         presetsList.forEach { preset ->
                             val isSelected = (preset.id == currentPresetId)
                             DropdownMenuItem(
                                 text = {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
+                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                                         Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                text = preset.name,
-                                                color = if (isSelected) Color(0xFFF59E0B) else Color.White,
-                                                fontSize = 12.sp,
-                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                                            )
-                                            Text(
-                                                text = if (isSelected && isPresetDirty)
-                                                    "Clique para descartar edições e reverter"
-                                                else
-                                                    "Corte: ${normToCutoffHz(preset.cutoffNorm).toInt()}Hz | Res: ${(preset.resNorm * 100).toInt()}%",
-                                                color = if (isSelected && isPresetDirty) Color(0xFFFBBF24) else Color.Gray,
-                                                fontSize = 9.sp
-                                            )
+                                            Text(preset.name, color = if (isSelected) Color(0xFFF59E0B) else Color.White, fontSize = 12.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal)
                                         }
-
-                                        Box(
-                                            modifier = Modifier
-                                                .size(22.dp)
-                                                .background(Color(0xFF7F1D1D), CircleShape)
-                                                .clickable {
-                                                    if (presetsList.size > 1) {
-                                                        val removingActive = (preset.id == currentPresetId)
-                                                        presetsList.remove(preset)
-                                                        if (removingActive) {
-                                                            applyPresetToEngine(presetsList.first())
-                                                        } else {
-                                                            savePresetsToDisk(presetsList, currentPresetId)
-                                                        }
-                                                    }
-                                                },
-                                            contentAlignment = Alignment.Center
-                                        ) {
+                                        Box(modifier = Modifier.size(22.dp).background(Color(0xFF7F1D1D), CircleShape).clickable { if (presetsList.size > 1) { val removingActive = (preset.id == currentPresetId); presetsList.remove(preset); if (removingActive) applyPresetToEngine(presetsList.first()) else savePresetsToDisk(presetsList, currentPresetId) } }, contentAlignment = Alignment.Center) {
                                             Text("×", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                                         }
                                     }
                                 },
-                                onClick = {
-                                    applyPresetToEngine(preset)
-                                    isPresetDropdownExpanded = false
-                                }
+                                onClick = { applyPresetToEngine(preset); isPresetDropdownExpanded = false }
                             )
                         }
-
                         Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color(0xFF334155)))
-
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    text = "+ SALVAR COMO NOVO PRESET...",
-                                    color = Color(0xFFF59E0B),
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            },
-                            onClick = {
-                                isPresetDropdownExpanded = false
-                                nameInputText = "User Patch ${presetsList.size + 1}"
-                                dialogTargetIsPreset = true
-                                isCreatingNewItem = true
-                                showNameDialog = true
-                            }
-                        )
-
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    text = "↺ RESTAURAR 8 PRESETS DE FÁBRICA",
-                                    color = Color(0xFF94A3B8),
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            },
-                            onClick = {
-                                isPresetDropdownExpanded = false
-                                val factory = getFactoryPresets()
-                                presetsList.clear()
-                                presetsList.addAll(factory)
-                                applyPresetToEngine(factory.first())
-                            }
-                        )
+                        DropdownMenuItem(text = { Text("+ SALVAR COMO NOVO PRESET...", color = Color(0xFFF59E0B), fontSize = 11.sp, fontWeight = FontWeight.Bold) }, onClick = { isPresetDropdownExpanded = false; nameInputText = "User Patch ${presetsList.size + 1}"; dialogTargetIsPreset = true; isCreatingNewItem = true; showNameDialog = true })
+                        DropdownMenuItem(text = { Text("↺ RESTAURAR 8 PRESETS DE FÁBRICA", color = Color(0xFF94A3B8), fontSize = 10.sp, fontWeight = FontWeight.Bold) }, onClick = { isPresetDropdownExpanded = false; val factory = getFactoryPresets(); presetsList.clear(); presetsList.addAll(factory); applyPresetToEngine(factory.first()) })
                     }
                 }
-
-                // --- 2. SELETOR DE SLOTS DE MAPEAMENTO MIDI ---
                 Box {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .background(Color(0xFF181B20), RoundedCornerShape(6.dp))
-                            .border(1.dp, Color(0xFF334155), RoundedCornerShape(6.dp))
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .clickable { isSlotDropdownExpanded = true }
-                                .padding(horizontal = 10.dp, vertical = 8.dp)
-                        ) {
-                            Text(
-                                text = "🎛️ $currentSlotName",
-                                color = Color(0xFFE2E8F0),
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold
-                            )
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.background(Color(0xFF181B20), RoundedCornerShape(6.dp)).border(1.dp, Color(0xFF334155), RoundedCornerShape(6.dp))) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { isSlotDropdownExpanded = true }.padding(horizontal = 10.dp, vertical = 8.dp)) {
+                            Text("🎛️ $currentSlotName", color = Color(0xFFE2E8F0), fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             Spacer(modifier = Modifier.width(6.dp))
                             Text("▼", color = Color(0xFF38BDF8), fontSize = 10.sp)
                         }
-
                         Box(modifier = Modifier.width(1.dp).height(22.dp).background(Color(0xFF334155)))
-
-                        Box(
-                            modifier = Modifier
-                                .clickable {
-                                    nameInputText = currentSlotName
-                                    dialogTargetIsPreset = false
-                                    isCreatingNewItem = false
-                                    showNameDialog = true
-                                }
-                                .padding(horizontal = 9.dp, vertical = 8.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
+                        Box(modifier = Modifier.clickable { nameInputText = currentSlotName; dialogTargetIsPreset = false; isCreatingNewItem = false; showNameDialog = true }.padding(horizontal = 9.dp, vertical = 8.dp), contentAlignment = Alignment.Center) {
                             Text("✎", color = Color(0xFF38BDF8), fontSize = 13.sp, fontWeight = FontWeight.Bold)
                         }
                     }
-
-                    DropdownMenu(
-                        expanded = isSlotDropdownExpanded,
-                        onDismissRequest = { isSlotDropdownExpanded = false },
-                        modifier = Modifier
-                            .background(Color(0xFF1E2229))
-                            .border(1.dp, Color(0xFF334155), RoundedCornerShape(6.dp))
-                            .width(250.dp)
-                    ) {
+                    DropdownMenu(expanded = isSlotDropdownExpanded, onDismissRequest = { isSlotDropdownExpanded = false }, modifier = Modifier.background(Color(0xFF1E2229)).border(1.dp, Color(0xFF334155), RoundedCornerShape(6.dp)).width(250.dp)) {
                         midiSlots.forEach { slot ->
                             val isSelected = (slot.id == currentSlotId)
                             DropdownMenuItem(
                                 text = {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
+                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                                         Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                text = slot.name,
-                                                color = if (isSelected) Color(0xFF38BDF8) else Color.White,
-                                                fontSize = 12.sp,
-                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                                            )
-                                            Text(
-                                                text = "${slot.mappings.size} CCs salvos",
-                                                color = Color.Gray,
-                                                fontSize = 10.sp
-                                            )
+                                            Text(slot.name, color = if (isSelected) Color(0xFF38BDF8) else Color.White, fontSize = 12.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal)
                                         }
-
-                                        Box(
-                                            modifier = Modifier
-                                                .size(22.dp)
-                                                .background(Color(0xFF7F1D1D), CircleShape)
-                                                .clickable {
-                                                    if (midiSlots.size > 1) {
-                                                        val removingActive = (slot.id == currentSlotId)
-                                                        midiSlots.remove(slot)
-                                                        if (removingActive) {
-                                                            selectSlot(midiSlots.first())
-                                                        } else {
-                                                            saveSlotsToDisk(midiSlots, currentSlotId)
-                                                        }
-                                                    } else {
-                                                        paramToCCMap.clear()
-                                                        syncCurrentMapToActiveSlot()
-                                                    }
-                                                },
-                                            contentAlignment = Alignment.Center
-                                        ) {
+                                        Box(modifier = Modifier.size(22.dp).background(Color(0xFF7F1D1D), CircleShape).clickable { if (midiSlots.size > 1) { val removingActive = (slot.id == currentSlotId); midiSlots.remove(slot); if (removingActive) selectSlot(midiSlots.first()) else saveSlotsToDisk(midiSlots, currentSlotId) } else { paramToCCMap.clear(); syncCurrentMapToActiveSlot() } }, contentAlignment = Alignment.Center) {
                                             Text("×", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                                         }
                                     }
                                 },
-                                onClick = {
-                                    selectSlot(slot)
-                                    isSlotDropdownExpanded = false
-                                }
+                                onClick = { selectSlot(slot); isSlotDropdownExpanded = false }
                             )
                         }
-
                         Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color(0xFF334155)))
-
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    text = "+ NOVO SLOT DE CONTROLADOR...",
-                                    color = Color(0xFF38BDF8),
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            },
-                            onClick = {
-                                isSlotDropdownExpanded = false
-                                nameInputText = "Controlador ${midiSlots.size + 1}"
-                                dialogTargetIsPreset = false
-                                isCreatingNewItem = true
-                                showNameDialog = true
-                            }
-                        )
+                        DropdownMenuItem(text = { Text("+ NOVO SLOT DE CONTROLADOR...", color = Color(0xFF38BDF8), fontSize = 11.sp, fontWeight = FontWeight.Bold) }, onClick = { isSlotDropdownExpanded = false; nameInputText = "Controlador ${midiSlots.size + 1}"; dialogTargetIsPreset = false; isCreatingNewItem = true; showNameDialog = true })
                     }
                 }
-
-                // Botão MIDI LEARN
-                Box(
-                    modifier = Modifier
-                        .background(
-                            if (isMidiLearnMode) Color(0xFFD97706) else Color(0xFF1E293B),
-                            RoundedCornerShape(6.dp)
-                        )
-                        .border(
-                            1.dp,
-                            if (isMidiLearnMode) Color(0xFFFDE047) else Color(0xFF38BDF8),
-                            RoundedCornerShape(6.dp)
-                        )
-                        .clickable {
-                            isMidiLearnMode = !isMidiLearnMode
-                            selectedParamForLearn = null
-                        }
-                        .padding(horizontal = 12.dp, vertical = 8.dp)
-                ) {
-                    Text(
-                        text = if (isMidiLearnMode) "SAIR DO LEARN" else "MIDI LEARN",
-                        color = Color.White,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+                Box(modifier = Modifier.background(if (isMidiLearnMode) Color(0xFFD97706) else Color(0xFF1E293B), RoundedCornerShape(6.dp)).border(1.dp, if (isMidiLearnMode) Color(0xFFFDE047) else Color(0xFF38BDF8), RoundedCornerShape(6.dp)).clickable { isMidiLearnMode = !isMidiLearnMode; selectedParamForLearn = null }.padding(horizontal = 12.dp, vertical = 8.dp)) {
+                    Text(if (isMidiLearnMode) "SAIR DO LEARN" else "MIDI LEARN", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 }
-
-                // Botão PANIC
-                Box(
-                    modifier = Modifier
-                        .background(Color(0xFF991B1B), RoundedCornerShape(6.dp))
-                        .border(1.dp, Color(0xFFEF4444), RoundedCornerShape(6.dp))
-                        .clickable { audioEngine.allNotesOff() }
-                        .padding(horizontal = 12.dp, vertical = 8.dp)
-                ) {
+                Box(modifier = Modifier.background(Color(0xFF991B1B), RoundedCornerShape(6.dp)).border(1.dp, Color(0xFFEF4444), RoundedCornerShape(6.dp)).clickable { audioEngine.allNotesOff() }.padding(horizontal = 12.dp, vertical = 8.dp)) {
                     Text("PANIC", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }
 
-        // Painel de Módulos
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            // --- MÓDULO 1: OSCILADORES ---
+        Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             ModuleBox(title = "OSCILADORES (POLYBLEP)") {
-                OscillatorRow(
-                    label = "OSC 1",
-                    wave = osc1Wave,
-                    onWaveChange = {
-                        osc1Wave = it
-                        audioEngine.setOscWave(0, it)
-                        isPresetDirty = true
-                    },
-                    levelKnob = { SmartKnob("OSC1_VOL", "LEVEL", "${(osc1Vol * 100).toInt()}%", osc1Vol) },
-                    tuneKnob = {
-                        val st = normToSemitones(osc1Tune).toInt()
-                        SmartKnob("OSC1_TUNE", "TUNE", "${if (st > 0) "+$st" else st} st", osc1Tune)
-                    }
-                )
+                OscillatorRow(label = "OSC 1", wave = osc1Wave, onWaveChange = { osc1Wave = it; audioEngine.setOscWave(0, it); isPresetDirty = true }, levelKnob = { SmartKnob("OSC1_VOL", "LEVEL", "${(osc1Vol * 100).toInt()}%", osc1Vol) }, tuneKnob = { val st = normToSemitones(osc1Tune).toInt(); SmartKnob("OSC1_TUNE", "TUNE", "${if (st > 0) "+$st" else st} st", osc1Tune) })
                 Spacer(modifier = Modifier.height(12.dp))
-                OscillatorRow(
-                    label = "OSC 2",
-                    wave = osc2Wave,
-                    onWaveChange = {
-                        osc2Wave = it
-                        audioEngine.setOscWave(1, it)
-                        isPresetDirty = true
-                    },
-                    levelKnob = { SmartKnob("OSC2_VOL", "LEVEL", "${(osc2Vol * 100).toInt()}%", osc2Vol) },
-                    tuneKnob = {
-                        val st = normToSemitones(osc2Tune).toInt()
-                        SmartKnob("OSC2_TUNE", "TUNE", "${if (st > 0) "+$st" else st} st", osc2Tune)
-                    }
-                )
+                OscillatorRow(label = "OSC 2", wave = osc2Wave, onWaveChange = { osc2Wave = it; audioEngine.setOscWave(1, it); isPresetDirty = true }, levelKnob = { SmartKnob("OSC2_VOL", "LEVEL", "${(osc2Vol * 100).toInt()}%", osc2Vol) }, tuneKnob = { val st = normToSemitones(osc2Tune).toInt(); SmartKnob("OSC2_TUNE", "TUNE", "${if (st > 0) "+$st" else st} st", osc2Tune) })
                 Spacer(modifier = Modifier.height(12.dp))
-                OscillatorRow(
-                    label = "OSC 3",
-                    wave = osc3Wave,
-                    onWaveChange = {
-                        osc3Wave = it
-                        audioEngine.setOscWave(2, it)
-                        isPresetDirty = true
-                    },
-                    levelKnob = { SmartKnob("OSC3_VOL", "LEVEL", "${(osc3Vol * 100).toInt()}%", osc3Vol) },
-                    tuneKnob = {
-                        val st = normToSemitones(osc3Tune).toInt()
-                        SmartKnob("OSC3_TUNE", "TUNE", "${if (st > 0) "+$st" else st} st", osc3Tune)
-                    }
-                )
+                OscillatorRow(label = "OSC 3", wave = osc3Wave, onWaveChange = { osc3Wave = it; audioEngine.setOscWave(2, it); isPresetDirty = true }, levelKnob = { SmartKnob("OSC3_VOL", "LEVEL", "${(osc3Vol * 100).toInt()}%", osc3Vol) }, tuneKnob = { val st = normToSemitones(osc3Tune).toInt(); SmartKnob("OSC3_TUNE", "TUNE", "${if (st > 0) "+$st" else st} st", osc3Tune) })
             }
 
-            // --- MÓDULO 2: FILTRO MOOG 24dB ---
             ModuleBox(title = "FILTRO MOOG 24dB (VCF)") {
                 Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
                     SmartKnob("CUTOFF", "CORTE", "${normToCutoffHz(cutoffNorm).toInt()} Hz", cutoffNorm)
@@ -1526,7 +836,6 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
                 }
             }
 
-            // --- MÓDULO 3: LFO & TAPE DELAY ---
             ModuleBox(title = "MODULAÇÃO (LFO) & DELAY") {
                 Text("LFO -> FILTRO MOOG (1V/OCT)", color = Color(0xFF94A3B8), fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(10.dp))
@@ -1544,7 +853,6 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
                 }
             }
 
-            // --- MÓDULO 4: AMPLIFICADOR (VCA) & SAÍDA ---
             ModuleBox(title = "AMPLIFICADOR (VCA) & SAÍDA") {
                 Text("ENVELOPE DE VOLUME RC (ADSR)", color = Color(0xFF94A3B8), fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(10.dp))
@@ -1571,141 +879,49 @@ fun TelemetryBadge(label: String, value: String, valueColor: Color) {
 }
 
 @Composable
-fun DspSliderRow(
-    title: String,
-    subtitle: String,
-    value: Float,
-    valueLabel: String,
-    onValueChange: (Float) -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(Color(0xFF1C2026), RoundedCornerShape(8.dp))
-            .padding(horizontal = 12.dp, vertical = 8.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+fun DspSliderRow(title: String, subtitle: String, value: Float, valueLabel: String, onValueChange: (Float) -> Unit) {
+    Column(modifier = Modifier.fillMaxWidth().background(Color(0xFF1C2026), RoundedCornerShape(8.dp)).padding(horizontal = 12.dp, vertical = 8.dp)) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Text(text = title, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
             Text(text = valueLabel, color = Color(0xFFF59E0B), fontSize = 11.sp, fontWeight = FontWeight.ExtraBold)
         }
         Text(text = subtitle, color = Color(0xFF94A3B8), fontSize = 9.sp)
-        Slider(
-            value = value,
-            onValueChange = onValueChange,
-            valueRange = 0f..1f,
-            colors = SliderDefaults.colors(
-                thumbColor = Color(0xFFF59E0B),
-                activeTrackColor = Color(0xFFF59E0B),
-                inactiveTrackColor = Color(0xFF0F1115)
-            )
-        )
+        Slider(value = value, onValueChange = onValueChange, valueRange = 0f..1f, colors = SliderDefaults.colors(thumbColor = Color(0xFFF59E0B), activeTrackColor = Color(0xFFF59E0B), inactiveTrackColor = Color(0xFF0F1115)))
     }
 }
 
 @Composable
-fun KnobControl(
-    label: String,
-    valueText: String,
-    value: Float,
-    isLearningSelected: Boolean = false,
-    mappedCC: Int? = null,
-    onUnmap: () -> Unit = {},
-    onKnobClick: () -> Unit = {},
-    onValueChange: (Float) -> Unit
-) {
+fun KnobControl(label: String, valueText: String, value: Float, isLearningSelected: Boolean = false, mappedCC: Int? = null, onUnmap: () -> Unit = {}, onKnobClick: () -> Unit = {}, onValueChange: (Float) -> Unit) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Box(contentAlignment = Alignment.TopEnd) {
-            Knob(
-                value = value,
-                onValueChange = onValueChange,
-                isLearningSelected = isLearningSelected,
-                onKnobClick = onKnobClick
-            )
-
+            Knob(value = value, onValueChange = onValueChange, isLearningSelected = isLearningSelected, onKnobClick = onKnobClick)
             if (mappedCC != null) {
-                Row(
-                    modifier = Modifier
-                        .offset(x = 6.dp, y = (-4).dp)
-                        .background(Color(0xFF0284C7), RoundedCornerShape(10.dp))
-                        .border(1.dp, Color(0xFF7DD3FC), RoundedCornerShape(10.dp))
-                        .padding(horizontal = 5.dp, vertical = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(3.dp)
-                ) {
-                    Text(
-                        text = "CC $mappedCC",
-                        color = Color.White,
-                        fontSize = 8.sp,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                    Box(
-                        modifier = Modifier
-                            .size(12.dp)
-                            .background(Color(0xFF0369A1), CircleShape)
-                            .clickable { onUnmap() },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("×", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                    }
+                Row(modifier = Modifier.offset(x = 6.dp, y = (-4).dp).background(Color(0xFF0284C7), RoundedCornerShape(10.dp)).border(1.dp, Color(0xFF7DD3FC), RoundedCornerShape(10.dp)).padding(horizontal = 5.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text("CC $mappedCC", color = Color.White, fontSize = 8.sp, fontWeight = FontWeight.ExtraBold)
+                    Box(modifier = Modifier.size(12.dp).background(Color(0xFF0369A1), CircleShape).clickable { onUnmap() }, contentAlignment = Alignment.Center) { Text("×", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold) }
                 }
             }
         }
         Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = label,
-            color = if (isLearningSelected) Color(0xFFFDE047) else Color.LightGray,
-            fontSize = 11.sp,
-            fontWeight = if (isLearningSelected) FontWeight.Bold else FontWeight.Medium
-        )
+        Text(label, color = if (isLearningSelected) Color(0xFFFDE047) else Color.LightGray, fontSize = 11.sp, fontWeight = if (isLearningSelected) FontWeight.Bold else FontWeight.Medium)
         Text(valueText, color = Color(0xFFF59E0B), fontSize = 10.sp)
     }
 }
 
 @Composable
-fun OscillatorRow(
-    label: String,
-    wave: Int,
-    onWaveChange: (Int) -> Unit,
-    levelKnob: @Composable () -> Unit,
-    tuneKnob: @Composable () -> Unit
-) {
+fun OscillatorRow(label: String, wave: Int, onWaveChange: (Int) -> Unit, levelKnob: @Composable () -> Unit, tuneKnob: @Composable () -> Unit) {
     val waveNames = listOf("SAW", "SQR", "TRI", "SIN")
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        modifier = Modifier
-            .background(Color(0xFF111317), RoundedCornerShape(8.dp))
-            .padding(10.dp)
-    ) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.background(Color(0xFF111317), RoundedCornerShape(8.dp)).padding(10.dp)) {
         Text(label, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(42.dp))
-
         levelKnob()
         tuneKnob()
-
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("ONDA", color = Color.Gray, fontSize = 10.sp)
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 waveNames.forEachIndexed { idx, name ->
                     val selected = (wave == idx)
-                    Box(
-                        modifier = Modifier
-                            .background(
-                                if (selected) Color(0xFFF59E0B) else Color(0xFF262930),
-                                RoundedCornerShape(4.dp)
-                            )
-                            .clickable { onWaveChange(idx) }
-                            .padding(horizontal = 8.dp, vertical = 6.dp)
-                    ) {
-                        Text(
-                            text = name,
-                            color = if (selected) Color.Black else Color.LightGray,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold
-                        )
+                    Box(modifier = Modifier.background(if (selected) Color(0xFFF59E0B) else Color(0xFF262930), RoundedCornerShape(4.dp)).clickable { onWaveChange(idx) }.padding(horizontal = 8.dp, vertical = 6.dp)) {
+                        Text(name, color = if (selected) Color.Black else Color.LightGray, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -1715,27 +931,13 @@ fun OscillatorRow(
 
 @Composable
 fun OscilloscopeView(waveform: FloatArray, trigger: Int) {
-    Box(
-        modifier = Modifier
-            .width(170.dp)
-            .height(48.dp)
-            .background(Color(0xFF07090C), RoundedCornerShape(6.dp))
-            .border(1.dp, Color(0xFF2D323B), RoundedCornerShape(6.dp))
-            .padding(4.dp)
-    ) {
+    Box(modifier = Modifier.width(170.dp).height(48.dp).background(Color(0xFF07090C), RoundedCornerShape(6.dp)).border(1.dp, Color(0xFF2D323B), RoundedCornerShape(6.dp)).padding(4.dp)) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             val unused = trigger
             val w = size.width
             val h = size.height
             val midY = h / 2f
-
-            drawLine(
-                color = Color(0xFF1E293B),
-                start = Offset(0f, midY),
-                end = Offset(w, midY),
-                strokeWidth = 1f
-            )
-
+            drawLine(color = Color(0xFF1E293B), start = Offset(0f, midY), end = Offset(w, midY), strokeWidth = 1f)
             if (waveform.isNotEmpty()) {
                 val path = Path()
                 val stepX = w / (waveform.size - 1).toFloat()
@@ -1744,11 +946,7 @@ fun OscilloscopeView(waveform: FloatArray, trigger: Int) {
                     val y = (midY - (waveform[i].coerceIn(-1f, 1f) * (midY * 0.85f)))
                     if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
                 }
-                drawPath(
-                    path = path,
-                    color = Color(0xFF10B981),
-                    style = Stroke(width = 2.2f)
-                )
+                drawPath(path = path, color = Color(0xFF10B981), style = Stroke(width = 2.2f))
             }
         }
     }
@@ -1756,13 +954,7 @@ fun OscilloscopeView(waveform: FloatArray, trigger: Int) {
 
 @Composable
 fun ModuleBox(title: String, content: @Composable ColumnScope.() -> Unit) {
-    Column(
-        modifier = Modifier
-            .background(Color(0xFF181B20), RoundedCornerShape(10.dp))
-            .border(1.dp, Color(0xFF2D323B), RoundedCornerShape(10.dp))
-            .padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
+    Column(modifier = Modifier.background(Color(0xFF181B20), RoundedCornerShape(10.dp)).border(1.dp, Color(0xFF2D323B), RoundedCornerShape(10.dp)).padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Text(title, color = Color(0xFFE2E8F0), fontSize = 13.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(14.dp))
         content()
