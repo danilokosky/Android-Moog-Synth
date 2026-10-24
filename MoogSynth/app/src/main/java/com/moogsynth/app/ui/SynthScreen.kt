@@ -296,6 +296,26 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
         savePresetsToDisk(presetsList, currentPresetId)
     }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    // =========================================================================
+    // PERSISTÊNCIA SÍNCRONA E À PROVA DE CRASH DOS SLOTS MIDI (SynthScreen.kt)
+    // Substitua as funções saveSlotsToDisk, syncCurrentMapToActiveSlot e selectSlot
+    // (por volta das linhas 299–330) por esta versão:
+    // =========================================================================
+
     fun saveSlotsToDisk(slots: List<MidiMappingSlot>, activeId: String) {
         val root = JSONObject()
         root.put("activeSlotId", activeId)
@@ -310,24 +330,48 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
             arr.put(obj)
         }
         root.put("slots", arr)
-        prefs.edit().putString("saved_midi_slots_json", root.toString()).apply()
+        // commit() grava de forma SÍNCRONA (bloqueante com fsync no disco) na mesma hora,
+        // garantindo que mesmo em caso de crash nativo (Oboe/JNI), force-stop ou desligamento
+        // abrupto do aparelho, o perfil ativo e seus mapeamentos já estejam salvos no armazenamento.
+        prefs.edit().putString("saved_midi_slots_json", root.toString()).commit()
     }
 
     fun syncCurrentMapToActiveSlot() {
+        val snapshotMap = paramToCCMap.toMap()
         val idx = midiSlots.indexOfFirst { it.id == currentSlotId }
         if (idx != -1) {
-            midiSlots[idx] = midiSlots[idx].copy(mappings = paramToCCMap.toMap())
+            midiSlots[idx] = midiSlots[idx].copy(mappings = snapshotMap)
+            saveSlotsToDisk(midiSlots, currentSlotId)
+        } else if (midiSlots.isNotEmpty()) {
+            // Fallback de segurança caso currentSlotId ainda não esteja apontando para o índice
+            val fallbackSlot = midiSlots.first()
+            currentSlotId = fallbackSlot.id
+            midiSlots[0] = fallbackSlot.copy(mappings = snapshotMap)
             saveSlotsToDisk(midiSlots, currentSlotId)
         }
     }
 
     fun selectSlot(slot: MidiMappingSlot) {
+        // Garante que qualquer alteração no slot anterior seja sincronizada antes de trocar
+        if (currentSlotId.isNotEmpty() && currentSlotId != slot.id) {
+            val prevIdx = midiSlots.indexOfFirst { it.id == currentSlotId }
+            if (prevIdx != -1) {
+                midiSlots[prevIdx] = midiSlots[prevIdx].copy(mappings = paramToCCMap.toMap())
+            }
+        }
         currentSlotId = slot.id
         paramToCCMap.clear()
         paramToCCMap.putAll(slot.mappings)
-        saveSlotsToDisk(midiSlots, currentSlotId)
+        saveSlotsToDisk(midiSlots, slot.id)
     }
 
+
+
+
+
+
+
+    
     LaunchedEffect(Unit) {
         val rawDspJson = prefs.getString("saved_engine_dsp_settings_json", null)
         if (rawDspJson != null) {
@@ -346,38 +390,63 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
         }
         applyEngineSettingsToNative()
 
+
+
+
+
+
+        // =========================================================================
+        // 2. Carrega Slots de Mapeamento MIDI (Dentro do LaunchedEffect(Unit) - Linha ~349)
+        // Substitua o bloco de leitura de "saved_midi_slots_json" por este:
+        // =========================================================================
         val rawSlotsJson = prefs.getString("saved_midi_slots_json", null)
         if (rawSlotsJson != null) {
             try {
                 val root = JSONObject(rawSlotsJson)
                 val savedActiveId = root.optString("activeSlotId", "")
-                val arr = root.getJSONArray("slots")
+                val arr = root.optJSONArray("slots")
                 val loaded = mutableListOf<MidiMappingSlot>()
-                for (i in 0 until arr.length()) {
-                    val obj = arr.getJSONObject(i)
-                    val id = obj.getString("id")
-                    val name = obj.getString("name")
-                    val mapObj = obj.getJSONObject("mappings")
-                    val map = mutableMapOf<String, Int>()
-                    val keys = mapObj.keys()
-                    while (keys.hasNext()) { map[keys.next()] = mapObj.getInt(keys.next()) }
-                    loaded.add(MidiMappingSlot(id, name, map))
+                if (arr != null) {
+                    for (i in 0 until arr.length()) {
+                        val obj = arr.optJSONObject(i) ?: continue
+                        val id = obj.optString("id", "")
+                        val name = obj.optString("name", "Slot ${i + 1}")
+                        if (id.isEmpty()) continue
+                        val mapObj = obj.optJSONObject("mappings")
+                        val map = mutableMapOf<String, Int>()
+                        if (mapObj != null) {
+                            val keys = mapObj.keys()
+                            while (keys.hasNext()) {
+                                val key = keys.next() // ✅ CORRIGIDO: consome a chave apenas 1 vez!
+                                map[key] = mapObj.optInt(key, -1)
+                            }
+                            map.entries.removeAll { it.value < 0 }
+                        }
+                        loaded.add(MidiMappingSlot(id, name, map))
+                    }
                 }
                 if (loaded.isNotEmpty()) {
-                    midiSlots.clear(); midiSlots.addAll(loaded)
+                    midiSlots.clear()
+                    midiSlots.addAll(loaded)
                     val active = loaded.find { it.id == savedActiveId } ?: loaded.first()
                     currentSlotId = active.id
-                    paramToCCMap.clear(); paramToCCMap.putAll(active.mappings)
+                    paramToCCMap.clear()
+                    paramToCCMap.putAll(active.mappings)
                 }
-            } catch (e: Exception) {}
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
         if (midiSlots.isEmpty()) {
             val defaultSlot = MidiMappingSlot(name = "Launchkey MK4", mappings = emptyMap())
             midiSlots.add(defaultSlot)
             currentSlotId = defaultSlot.id
-            saveSlotsToDisk(midiSlots, currentSlotId)
+            saveSlotsToDisk(midiSlots, defaultSlot.id)
         }
 
+
+
+        
         val rawPresetsJson = prefs.getString("saved_synth_presets_v2_json", null)
         if (rawPresetsJson != null) {
             try {
