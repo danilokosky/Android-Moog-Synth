@@ -64,6 +64,32 @@ data class SynthPreset(
     val masterNorm: Float
 )
 
+fun getDefaultLaunchkeyMK4Mappings(): Map<String, Int> = mapOf(
+    "OSC1_VOL" to 29,
+    "OSC1_TUNE" to 36,
+    "OSC2_VOL" to 30,
+    "OSC2_TUNE" to 35,
+    "OSC3_VOL" to 31,
+    "OSC3_TUNE" to 34,
+    "CUTOFF" to 88,
+    "RESONANCE" to 85,
+    "ENV_AMT" to 86,
+    "F_ATK" to 25,
+    "F_DEC" to 26,
+    "F_SUS" to 27,
+    "F_REL" to 28,
+    "LFO_RATE" to 23,
+    "LFO_DEPTH" to 24,
+    "DELAY_TIME" to 21,
+    "DELAY_FB" to 22,
+    "DELAY_MIX" to 87,
+    "A_ATK" to 81,
+    "A_DEC" to 82,
+    "A_SUS" to 83,
+    "A_REL" to 84,
+    "MASTER" to 89
+)
+
 fun getFactoryPresets(): List<SynthPreset> = listOf(
     SynthPreset(
         name = "1. Classic Minimoog Lead",
@@ -180,7 +206,7 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
         obj.put("maxPolyphony", maxPolyphony)
         obj.put("bufferBurstMult", bufferBurstMult)
         obj.put("paramSmoothing", paramSmoothing)
-        prefs.edit().putString("saved_engine_dsp_settings_json", obj.toString()).apply()
+        prefs.edit().putString("saved_engine_dsp_settings_json", obj.toString()).commit()
     }
 
     fun applyEngineSettingsToNative() {
@@ -238,7 +264,7 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
             arr.put(o)
         }
         root.put("presets", arr)
-        prefs.edit().putString("saved_synth_presets_v2_json", root.toString()).apply()
+        prefs.edit().putString("saved_synth_presets_v2_json", root.toString()).commit()
     }
 
     fun saveCurrentStateToActivePresetExplicitly() {
@@ -296,26 +322,6 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
         savePresetsToDisk(presetsList, currentPresetId)
     }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    // =========================================================================
-    // PERSISTÊNCIA SÍNCRONA E À PROVA DE CRASH DOS SLOTS MIDI (SynthScreen.kt)
-    // Substitua as funções saveSlotsToDisk, syncCurrentMapToActiveSlot e selectSlot
-    // (por volta das linhas 299–330) por esta versão:
-    // =========================================================================
-
     fun saveSlotsToDisk(slots: List<MidiMappingSlot>, activeId: String) {
         val root = JSONObject()
         root.put("activeSlotId", activeId)
@@ -330,9 +336,7 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
             arr.put(obj)
         }
         root.put("slots", arr)
-        // commit() grava de forma SÍNCRONA (bloqueante com fsync no disco) na mesma hora,
-        // garantindo que mesmo em caso de crash nativo (Oboe/JNI), force-stop ou desligamento
-        // abrupto do aparelho, o perfil ativo e seus mapeamentos já estejam salvos no armazenamento.
+        // commit() grava de forma SÍNCRONA imediata na memória flash (à prova de crash, force-stop ou desligamento)
         prefs.edit().putString("saved_midi_slots_json", root.toString()).commit()
     }
 
@@ -343,7 +347,6 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
             midiSlots[idx] = midiSlots[idx].copy(mappings = snapshotMap)
             saveSlotsToDisk(midiSlots, currentSlotId)
         } else if (midiSlots.isNotEmpty()) {
-            // Fallback de segurança caso currentSlotId ainda não esteja apontando para o índice
             val fallbackSlot = midiSlots.first()
             currentSlotId = fallbackSlot.id
             midiSlots[0] = fallbackSlot.copy(mappings = snapshotMap)
@@ -352,7 +355,7 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
     }
 
     fun selectSlot(slot: MidiMappingSlot) {
-        // Garante que qualquer alteração no slot anterior seja sincronizada antes de trocar
+        // Sincroniza e preserva os mapeamentos do slot anterior antes de trocar de perfil
         if (currentSlotId.isNotEmpty() && currentSlotId != slot.id) {
             val prevIdx = midiSlots.indexOfFirst { it.id == currentSlotId }
             if (prevIdx != -1) {
@@ -365,13 +368,6 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
         saveSlotsToDisk(midiSlots, slot.id)
     }
 
-
-
-
-
-
-
-    
     LaunchedEffect(Unit) {
         val rawDspJson = prefs.getString("saved_engine_dsp_settings_json", null)
         if (rawDspJson != null) {
@@ -390,15 +386,6 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
         }
         applyEngineSettingsToNative()
 
-
-
-
-
-
-        // =========================================================================
-        // 2. Carrega Slots de Mapeamento MIDI (Dentro do LaunchedEffect(Unit) - Linha ~349)
-        // Substitua o bloco de leitura de "saved_midi_slots_json" por este:
-        // =========================================================================
         val rawSlotsJson = prefs.getString("saved_midi_slots_json", null)
         if (rawSlotsJson != null) {
             try {
@@ -417,7 +404,7 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
                         if (mapObj != null) {
                             val keys = mapObj.keys()
                             while (keys.hasNext()) {
-                                val key = keys.next() // ✅ CORRIGIDO: consome a chave apenas 1 vez!
+                                val key = keys.next()
                                 map[key] = mapObj.optInt(key, -1)
                             }
                             map.entries.removeAll { it.value < 0 }
@@ -438,15 +425,18 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
             }
         }
         if (midiSlots.isEmpty()) {
-            val defaultSlot = MidiMappingSlot(name = "Launchkey MK4", mappings = emptyMap())
+            // Perfil padrão com todos os 23 knobs mapeados para a Novation Launchkey MK4 49
+            val defaultSlot = MidiMappingSlot(
+                name = "Launchkey MK4",
+                mappings = getDefaultLaunchkeyMK4Mappings()
+            )
             midiSlots.add(defaultSlot)
             currentSlotId = defaultSlot.id
+            paramToCCMap.clear()
+            paramToCCMap.putAll(defaultSlot.mappings)
             saveSlotsToDisk(midiSlots, defaultSlot.id)
         }
 
-
-
-        
         val rawPresetsJson = prefs.getString("saved_synth_presets_v2_json", null)
         if (rawPresetsJson != null) {
             try {
@@ -496,13 +486,13 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
             "OSC2_TUNE" -> { osc2Tune = v; audioEngine.setOscTune(1, normToSemitones(v)) }
             "OSC3_VOL" -> { osc3Vol = v; audioEngine.setOscVolume(2, v) }
             "OSC3_TUNE" -> { osc3Tune = v; audioEngine.setOscTune(2, normToSemitones(v)) }
-            "CUTOFF" -> { cutoffNorm = v; audioEngine.setFilterCutoff(normToCutoffHz(v)) }
+            "CUTOFF" -> { cutoffNorm = v; audioEngine.setFilterCutoff(normToCutoffHz(cutoffNorm)) }
             "RESONANCE" -> { resNorm = v; audioEngine.setFilterResonance(v) }
             "ENV_AMT" -> { envAmtNorm = v; audioEngine.setFilterEnvAmount(v * 5000f) }
             "F_ATK" -> { fAttack = v; audioEngine.setFilterADSR(fAttack * 2f, fDecay * 2f, fSustain, fRelease * 3f) }
             "F_DEC" -> { fDecay = v; audioEngine.setFilterADSR(fAttack * 2f, fDecay * 2f, fSustain, fRelease * 3f) }
-            "F_SUS" -> { fSustain = v; audioEngine.setFilterADSR(fAttack * 2f, fDecay * 2f, fSustain, fRelease * 3f) }
             "F_REL" -> { fRelease = v; audioEngine.setFilterADSR(fAttack * 2f, fDecay * 2f, fSustain, fRelease * 3f) }
+            "F_SUS" -> { fSustain = v; audioEngine.setFilterADSR(fAttack * 2f, fDecay * 2f, fSustain, fRelease * 3f) }
             "LFO_RATE" -> { lfoRateNorm = v; audioEngine.setLfoRate(0.1f + v * 19.9f) }
             "LFO_DEPTH" -> { lfoDepthNorm = v; audioEngine.setLfoDepth(v * 3000f) }
             "DELAY_TIME" -> { delayTimeNorm = v; audioEngine.setDelayParams(0.05f + v * 0.95f, delayFbNorm, delayMixNorm) }
@@ -573,7 +563,6 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
         }
     }
 
-
     if (showAudioSettingsDialog) {
         AlertDialog(
             onDismissRequest = { showAudioSettingsDialog = false },
@@ -619,24 +608,11 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
                     )
                 }
             },
-
-
-
-
-
-
-
-
-
-
-
-
-            
             text = {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(max = 400.dp) // Reduzido para caber melhor na tela horizontal Dex
+                        .heightIn(max = 400.dp)
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
@@ -774,7 +750,10 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
                                 midiSlots.add(newSlot); selectSlot(newSlot)
                             } else {
                                 val idx = midiSlots.indexOfFirst { it.id == currentSlotId }
-                                if (idx != -1) { midiSlots[idx] = midiSlots[idx].copy(name = finalName); saveSlotsToDisk(midiSlots, currentSlotId) }
+                                if (idx != -1) {
+                                    midiSlots[idx] = midiSlots[idx].copy(name = finalName, mappings = paramToCCMap.toMap())
+                                    saveSlotsToDisk(midiSlots, currentSlotId)
+                                }
                             }
                         }
                         showNameDialog = false
@@ -882,6 +861,17 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
                         }
                         Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color(0xFF334155)))
                         DropdownMenuItem(text = { Text("+ NOVO SLOT DE CONTROLADOR...", color = Color(0xFF38BDF8), fontSize = 11.sp, fontWeight = FontWeight.Bold) }, onClick = { isSlotDropdownExpanded = false; nameInputText = "Controlador ${midiSlots.size + 1}"; dialogTargetIsPreset = false; isCreatingNewItem = true; showNameDialog = true })
+                        DropdownMenuItem(text = { Text("↺ RESTAURAR PADRÃO LAUNCHKEY MK4", color = Color(0xFF94A3B8), fontSize = 10.sp, fontWeight = FontWeight.Bold) }, onClick = {
+                            isSlotDropdownExpanded = false
+                            val defaultSlot = MidiMappingSlot(name = "Launchkey MK4", mappings = getDefaultLaunchkeyMK4Mappings())
+                            val existingIdx = midiSlots.indexOfFirst { it.name == "Launchkey MK4" }
+                            if (existingIdx != -1) {
+                                midiSlots[existingIdx] = defaultSlot
+                            } else {
+                                midiSlots.add(0, defaultSlot)
+                            }
+                            selectSlot(defaultSlot)
+                        })
                     }
                 }
                 Box(modifier = Modifier.background(if (isMidiLearnMode) Color(0xFFD97706) else Color(0xFF1E293B), RoundedCornerShape(6.dp)).border(1.dp, if (isMidiLearnMode) Color(0xFFFDE047) else Color(0xFF38BDF8), RoundedCornerShape(6.dp)).clickable { isMidiLearnMode = !isMidiLearnMode; selectedParamForLearn = null }.padding(horizontal = 12.dp, vertical = 8.dp)) {
