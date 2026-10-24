@@ -1,6 +1,8 @@
 package com.moogsynth.app.ui
 
 import android.content.Context
+import android.media.midi.MidiDeviceInfo
+import android.media.midi.MidiManager
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -145,6 +147,11 @@ fun getFactoryPresets(): List<SynthPreset> = listOf(
 fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = null) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("moog_midi_slots_prefs", Context.MODE_PRIVATE) }
+    val midiManager = remember { context.getSystemService(Context.MIDI_SERVICE) as? MidiManager }
+
+    var detectedMidiDeviceName by remember { mutableStateOf<String?>(null) }
+    var lastReceivedMidiInfo by remember { mutableStateOf<String?>(null) }
+    var isTestTonePlaying by remember { mutableStateOf(false) }
 
     var osc1Vol by remember { mutableStateOf(0.75f) }
     var osc1Tune by remember { mutableStateOf(0.5f) }
@@ -336,7 +343,7 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
             arr.put(obj)
         }
         root.put("slots", arr)
-        // commit() grava de forma SÍNCRONA imediata na memória flash (à prova de crash, force-stop ou desligamento)
+        // commit() grava de forma SÍNCRONA imediata na memória flash
         prefs.edit().putString("saved_midi_slots_json", root.toString()).commit()
     }
 
@@ -355,7 +362,6 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
     }
 
     fun selectSlot(slot: MidiMappingSlot) {
-        // Sincroniza e preserva os mapeamentos do slot anterior antes de trocar de perfil
         if (currentSlotId.isNotEmpty() && currentSlotId != slot.id) {
             val prevIdx = midiSlots.indexOfFirst { it.id == currentSlotId }
             if (prevIdx != -1) {
@@ -366,6 +372,24 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
         paramToCCMap.clear()
         paramToCCMap.putAll(slot.mappings)
         saveSlotsToDisk(midiSlots, slot.id)
+    }
+
+    // Monitoramento contínuo de dispositivos MIDI conectados via USB
+    LaunchedEffect(Unit) {
+        val checkMidi = {
+            val devs = midiManager?.devices
+            if (devs != null && devs.isNotEmpty()) {
+                val names = devs.mapNotNull { it.properties.getString(MidiDeviceInfo.PROPERTY_NAME) }
+                detectedMidiDeviceName = if (names.isNotEmpty()) names.joinToString(", ") else "Controladora USB Conectada"
+            } else {
+                detectedMidiDeviceName = null
+            }
+        }
+        checkMidi()
+        while (true) {
+            delay(1500L)
+            checkMidi()
+        }
     }
 
     LaunchedEffect(Unit) {
@@ -425,7 +449,6 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
             }
         }
         if (midiSlots.isEmpty()) {
-            // Perfil padrão com todos os 23 knobs mapeados para a Novation Launchkey MK4 49
             val defaultSlot = MidiMappingSlot(
                 name = "Launchkey MK4",
                 mappings = getDefaultLaunchkeyMK4Mappings()
@@ -486,13 +509,13 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
             "OSC2_TUNE" -> { osc2Tune = v; audioEngine.setOscTune(1, normToSemitones(v)) }
             "OSC3_VOL" -> { osc3Vol = v; audioEngine.setOscVolume(2, v) }
             "OSC3_TUNE" -> { osc3Tune = v; audioEngine.setOscTune(2, normToSemitones(v)) }
-            "CUTOFF" -> { cutoffNorm = v; audioEngine.setFilterCutoff(normToCutoffHz(cutoffNorm)) }
+            "CUTOFF" -> { cutoffNorm = v; audioEngine.setFilterCutoff(normToCutoffHz(v)) }
             "RESONANCE" -> { resNorm = v; audioEngine.setFilterResonance(v) }
             "ENV_AMT" -> { envAmtNorm = v; audioEngine.setFilterEnvAmount(v * 5000f) }
             "F_ATK" -> { fAttack = v; audioEngine.setFilterADSR(fAttack * 2f, fDecay * 2f, fSustain, fRelease * 3f) }
             "F_DEC" -> { fDecay = v; audioEngine.setFilterADSR(fAttack * 2f, fDecay * 2f, fSustain, fRelease * 3f) }
-            "F_REL" -> { fRelease = v; audioEngine.setFilterADSR(fAttack * 2f, fDecay * 2f, fSustain, fRelease * 3f) }
             "F_SUS" -> { fSustain = v; audioEngine.setFilterADSR(fAttack * 2f, fDecay * 2f, fSustain, fRelease * 3f) }
+            "F_REL" -> { fRelease = v; audioEngine.setFilterADSR(fAttack * 2f, fDecay * 2f, fSustain, fRelease * 3f) }
             "LFO_RATE" -> { lfoRateNorm = v; audioEngine.setLfoRate(0.1f + v * 19.9f) }
             "LFO_DEPTH" -> { lfoDepthNorm = v; audioEngine.setLfoDepth(v * 3000f) }
             "DELAY_TIME" -> { delayTimeNorm = v; audioEngine.setDelayParams(0.05f + v * 0.95f, delayFbNorm, delayMixNorm) }
@@ -509,6 +532,7 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
 
     LaunchedEffect(incomingMidiCC) {
         incomingMidiCC?.let { event ->
+            lastReceivedMidiInfo = "CC ${event.cc} = ${event.value}"
             val norm = (event.value / 127f).coerceIn(0f, 1f)
             if (isMidiLearnMode && selectedParamForLearn != null) {
                 val targetParam = selectedParamForLearn!!
@@ -562,6 +586,11 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
             delay(16L)
         }
     }
+
+    // Verificação de silêncio (caso os faders físicos estejam abaixados a 0%)
+    val isVolumeMuted = (masterNorm <= 0.04f)
+    val isCutoffClosed = (cutoffNorm <= 0.04f)
+    val areOscsMuted = (osc1Vol <= 0.04f && osc2Vol <= 0.04f && osc3Vol <= 0.04f)
 
     if (showAudioSettingsDialog) {
         AlertDialog(
@@ -770,6 +799,44 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
         modifier = Modifier.fillMaxSize().background(Color(0xFF0F1115)).verticalScroll(rememberScrollState()).padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        // Alerta dinâmico de silêncio caso o fader Master ou Cutoff estejam abaixados
+        if (isVolumeMuted || isCutoffClosed || areOscsMuted) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp)
+                    .background(Color(0xFF7F1D1D).copy(alpha = 0.9f), RoundedCornerShape(8.dp))
+                    .border(1.dp, Color(0xFFEF4444), RoundedCornerShape(8.dp))
+                    .padding(horizontal = 14.dp, vertical = 9.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "⚠️ ATENÇÃO: SOM MUDO (" + when {
+                        isVolumeMuted -> "Master está em ${(masterNorm * 100).toInt()}% - Fader CC 89 abaixado"
+                        isCutoffClosed -> "Filtro fechado em ${normToCutoffHz(cutoffNorm).toInt()}Hz - Fader CC 88 abaixado"
+                        else -> "Osciladores em 0% - Knobs CC 29/30/31 abaixados"
+                    } + ")",
+                    color = Color.White,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Box(
+                    modifier = Modifier
+                        .background(Color(0xFFDC2626), RoundedCornerShape(6.dp))
+                        .clickable {
+                            masterNorm = 0.85f; audioEngine.setMasterVolume(0.85f)
+                            cutoffNorm = 0.65f; audioEngine.setFilterCutoff(normToCutoffHz(0.65f))
+                            if (osc1Vol < 0.2f) { osc1Vol = 0.75f; audioEngine.setOscVolume(0, 0.75f) }
+                            if (osc2Vol < 0.2f) { osc2Vol = 0.55f; audioEngine.setOscVolume(1, 0.55f) }
+                        }
+                        .padding(horizontal = 10.dp, vertical = 5.dp)
+                ) {
+                    Text("🔊 RESTAURAR SOM AGORA", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold)
+                }
+            }
+        }
+
         Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(bottom = 16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.padding(end = 12.dp)) {
                 Text("MOOG POLY-D NATIVE", color = Color(0xFFF59E0B), fontSize = 17.sp, fontWeight = FontWeight.Bold)
@@ -789,9 +856,65 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
             Spacer(modifier = Modifier.width(10.dp))
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(modifier = Modifier.background(Color(0xFF181B20), RoundedCornerShape(6.dp)).border(1.dp, Color(0xFF10B981).copy(alpha = 0.7f), RoundedCornerShape(6.dp)).clickable { showAudioSettingsDialog = true }.padding(horizontal = 11.dp, vertical = 8.dp)) {
-                    Text("⚙️ ÁUDIO & DSP (${oversamplingFactor}x)", color = Color(0xFF10B981), fontSize = 11.sp, fontWeight = FontWeight.ExtraBold)
+                // Indicador de Status do Cabo / Conexão USB MIDI
+                Box(
+                    modifier = Modifier
+                        .background(
+                            if (detectedMidiDeviceName != null) Color(0xFF064E3B).copy(alpha = 0.75f) else Color(0xFF451A03).copy(alpha = 0.75f),
+                            RoundedCornerShape(6.dp)
+                        )
+                        .border(
+                            1.dp,
+                            if (detectedMidiDeviceName != null) Color(0xFF10B981) else Color(0xFFF59E0B),
+                            RoundedCornerShape(6.dp)
+                        )
+                        .padding(horizontal = 9.dp, vertical = 6.dp)
+                ) {
+                    Column {
+                        Text(
+                            text = if (detectedMidiDeviceName != null) "● $detectedMidiDeviceName" else "○ MIDI: Reconecte Cabo USB",
+                            color = if (detectedMidiDeviceName != null) Color(0xFF34D399) else Color(0xFFFCD34D),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        if (lastReceivedMidiInfo != null) {
+                            Text(
+                                text = "RX: $lastReceivedMidiInfo",
+                                color = Color(0xFF94A3B8),
+                                fontSize = 8.sp
+                            )
+                        }
+                    }
                 }
+
+                // Botão de Teste de Som Direto
+                Box(
+                    modifier = Modifier
+                        .background(if (isTestTonePlaying) Color(0xFF059669) else Color(0xFF1E293B), RoundedCornerShape(6.dp))
+                        .border(1.dp, if (isTestTonePlaying) Color(0xFF34D399) else Color(0xFF38BDF8), RoundedCornerShape(6.dp))
+                        .clickable {
+                            if (isTestTonePlaying) {
+                                audioEngine.noteOff(60)
+                                isTestTonePlaying = false
+                            } else {
+                                isTestTonePlaying = true
+                                audioEngine.noteOn(60, 100)
+                            }
+                        }
+                        .padding(horizontal = 10.dp, vertical = 8.dp)
+                ) {
+                    Text(
+                        text = if (isTestTonePlaying) "⏹ PARAR" else "🔊 TESTAR SOM",
+                        color = Color.White,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                Box(modifier = Modifier.background(Color(0xFF181B20), RoundedCornerShape(6.dp)).border(1.dp, Color(0xFF10B981).copy(alpha = 0.7f), RoundedCornerShape(6.dp)).clickable { showAudioSettingsDialog = true }.padding(horizontal = 11.dp, vertical = 8.dp)) {
+                    Text("⚙️ DSP (${oversamplingFactor}x)", color = Color(0xFF10B981), fontSize = 11.sp, fontWeight = FontWeight.ExtraBold)
+                }
+
                 Box {
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.background(Color(0xFF181B20), RoundedCornerShape(6.dp)).border(1.dp, if (isPresetDirty) Color(0xFFFDE047) else Color(0xFFF59E0B).copy(alpha = 0.6f), RoundedCornerShape(6.dp))) {
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { isPresetDropdownExpanded = true }.padding(horizontal = 10.dp, vertical = 8.dp)) {
@@ -877,7 +1000,10 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
                 Box(modifier = Modifier.background(if (isMidiLearnMode) Color(0xFFD97706) else Color(0xFF1E293B), RoundedCornerShape(6.dp)).border(1.dp, if (isMidiLearnMode) Color(0xFFFDE047) else Color(0xFF38BDF8), RoundedCornerShape(6.dp)).clickable { isMidiLearnMode = !isMidiLearnMode; selectedParamForLearn = null }.padding(horizontal = 12.dp, vertical = 8.dp)) {
                     Text(if (isMidiLearnMode) "SAIR DO LEARN" else "MIDI LEARN", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 }
-                Box(modifier = Modifier.background(Color(0xFF991B1B), RoundedCornerShape(6.dp)).border(1.dp, Color(0xFFEF4444), RoundedCornerShape(6.dp)).clickable { audioEngine.allNotesOff() }.padding(horizontal = 12.dp, vertical = 8.dp)) {
+                Box(modifier = Modifier.background(Color(0xFF991B1B), RoundedCornerShape(6.dp)).border(1.dp, Color(0xFFEF4444), RoundedCornerShape(6.dp)).clickable {
+                    audioEngine.allNotesOff()
+                    isTestTonePlaying = false
+                }.padding(horizontal = 12.dp, vertical = 8.dp)) {
                     Text("PANIC", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 }
             }
