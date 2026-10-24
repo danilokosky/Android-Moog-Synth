@@ -4,6 +4,7 @@ import android.content.Context
 import android.media.midi.MidiDevice
 import android.media.midi.MidiDeviceInfo
 import android.media.midi.MidiManager
+import android.media.midi.MidiOutputPort
 import android.media.midi.MidiReceiver
 import android.os.Handler
 import android.os.Looper
@@ -17,6 +18,8 @@ class MidiHandler(
 ) {
     private val midiManager = context.getSystemService(Context.MIDI_SERVICE) as MidiManager
     private val openedDevices = mutableMapOf<MidiDeviceInfo, MidiDevice>()
+    // CRÍTICO: Guarda as referências das portas para que o Garbage Collector do Android NÃO as feche!
+    private val openedPorts = mutableListOf<MidiOutputPort>()
     private val mainHandler = Handler(Looper.getMainLooper())
 
     fun setupMidi() {
@@ -27,6 +30,8 @@ class MidiHandler(
 
             override fun onDeviceRemoved(deviceInfo: MidiDeviceInfo) {
                 openedDevices.remove(deviceInfo)?.close()
+                openedPorts.forEach { try { it.close() } catch(e: Exception) {} }
+                openedPorts.clear()
                 onAllNotesOff()
             }
         }, mainHandler)
@@ -43,7 +48,10 @@ class MidiHandler(
                 val portCount = deviceInfo.outputPortCount
                 for (i in 0 until portCount) {
                     val outputPort = device.openOutputPort(i)
-                    outputPort?.connect(MidiStreamParser())
+                    if (outputPort != null) {
+                        openedPorts.add(outputPort)
+                        outputPort.connect(MidiStreamParser())
+                    }
                 }
             }
         }, mainHandler)
@@ -95,7 +103,7 @@ class MidiHandler(
                             i += 2
                         } else break
                     }
-                    0xB0 -> { // Control Change (Knobs e Faders físicos)
+                    0xB0 -> { // Control Change (Knobs e Faders)
                         if (i + 1 < end) {
                             val cc = msg[i].toInt() and 0x7F
                             val value = msg[i + 1].toInt() and 0x7F
