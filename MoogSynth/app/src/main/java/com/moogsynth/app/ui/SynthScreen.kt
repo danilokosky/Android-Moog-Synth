@@ -195,6 +195,25 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
     val prefs = remember { context.getSharedPreferences("moog_midi_slots_prefs", Context.MODE_PRIVATE) }
 
     // Estado inicial padrão 100% puro e afinado (OSC1=0st, OSC2=0st, OSC3=-12st, Delay Mix=0%)
+    
+    // Layers & Synth Selection
+    var currentLayer by remember { mutableStateOf(0) } // 0 = Layer A, 1 = Layer B
+    var synthTypeA by remember { mutableStateOf(0) } // 0 = Moog, 1 = Juno
+    var synthTypeB by remember { mutableStateOf(0) } // 0 = Moog, 1 = Juno
+
+    // JUNO STATES
+    var junoRange by remember { mutableStateOf(1) } // 0=16', 1=8', 2=4'
+    var junoPulseVol by remember { mutableStateOf(0.8f) }
+    var junoSawVol by remember { mutableStateOf(0.8f) }
+    var junoSubVol by remember { mutableStateOf(0.5f) }
+    var junoNoiseVol by remember { mutableStateOf(0.0f) }
+    var junoPwm by remember { mutableStateOf(0.5f) }
+    var junoHpf by remember { mutableStateOf(0.0f) }
+    var junoVcfCutoff by remember { mutableStateOf(0.6f) }
+    var junoVcfRes by remember { mutableStateOf(0.2f) }
+    var junoEnvAmt by remember { mutableStateOf(0.5f) }
+    var junoChorus by remember { mutableStateOf(0) } // 0=Off, 1=I, 2=II, 3=I+II
+
     var osc1Vol by remember { mutableStateOf(0.80f) }
     var osc1Tune by remember { mutableStateOf(0.50f) }
     var osc1Wave by remember { mutableStateOf(0) }
@@ -550,6 +569,15 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
             "A_SUS" -> { aSustain = v; audioEngine.setAmpADSR(aAttack * 2f, aDecay * 2f, aSustain, aRelease * 3f) }
             "A_REL" -> { aRelease = v; audioEngine.setAmpADSR(aAttack * 2f, aDecay * 2f, aSustain, aRelease * 3f) }
             "MASTER" -> { masterNorm = v; audioEngine.setMasterVolume(v) }
+            "JUNO_PULSE" -> { junoPulseVol = v }
+            "JUNO_SAW" -> { junoSawVol = v }
+            "JUNO_SUB" -> { junoSubVol = v }
+            "JUNO_NOISE" -> { junoNoiseVol = v }
+            "JUNO_PWM" -> { junoPwm = v }
+            "JUNO_HPF" -> { junoHpf = v }
+            "JUNO_CUTOFF" -> { junoVcfCutoff = v }
+            "JUNO_RES" -> { junoVcfRes = v }
+            "JUNO_ENV" -> { junoEnvAmt = v }
         }
         isPresetDirty = true
     }
@@ -932,7 +960,38 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
             }
         }
 
-        Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        
+        // --- TABS (LAYER A / LAYER B) ---
+        Row(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp), horizontalArrangement = Arrangement.Center) {
+            Box(modifier = Modifier.background(Color(0xFF181B20), RoundedCornerShape(8.dp)).border(1.dp, Color(0xFF334155), RoundedCornerShape(8.dp)).padding(4.dp)) {
+                Row {
+                    Box(modifier = Modifier.background(if (currentLayer == 0) Color(0xFFF59E0B) else Color.Transparent, RoundedCornerShape(6.dp)).clickable { currentLayer = 0 }.padding(horizontal = 24.dp, vertical = 8.dp)) {
+                        Text("LAYER A", color = if (currentLayer == 0) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                    }
+                    Box(modifier = Modifier.background(if (currentLayer == 1) Color(0xFF0284C7) else Color.Transparent, RoundedCornerShape(6.dp)).clickable { currentLayer = 1 }.padding(horizontal = 24.dp, vertical = 8.dp)) {
+                        Text("LAYER B", color = if (currentLayer == 1) Color.White else Color.Gray, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+        
+        // --- SYNTH SELECTOR ---
+        val activeSynthType = if (currentLayer == 0) synthTypeA else synthTypeB
+        Row(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp), horizontalArrangement = Arrangement.Center) {
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Box(modifier = Modifier.background(if (activeSynthType == 0) Color(0xFF334155) else Color(0xFF111317), RoundedCornerShape(8.dp)).clickable { if (currentLayer == 0) synthTypeA = 0 else synthTypeB = 0 }.padding(horizontal = 16.dp, vertical = 10.dp)) {
+                    Text("🎛️ MOOG POLY-D", color = if (activeSynthType == 0) Color.White else Color.Gray, fontWeight = FontWeight.Bold)
+                }
+                Box(modifier = Modifier.background(if (activeSynthType == 1) Color(0xFF7E22CE) else Color(0xFF111317), RoundedCornerShape(8.dp)).clickable { if (currentLayer == 0) synthTypeA = 1 else synthTypeB = 1 }.padding(horizontal = 16.dp, vertical = 10.dp)) {
+                    Text("🎹 ROLAND JUNO-6", color = if (activeSynthType == 1) Color.White else Color.Gray, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+
+        if (activeSynthType == 0) {
+            // MOOG POLY-D NATIVE UI
+            Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+
             ModuleBox(title = "OSCILADORES 64-BIT (POLYBLEP/BLAMP)") {
                 OscillatorRow(label = "OSC 1", wave = osc1Wave, onWaveChange = { osc1Wave = it; audioEngine.setOscWave(0, it); isPresetDirty = true }, levelKnob = { SmartKnob("OSC1_VOL", "LEVEL", "${(osc1Vol * 100).toInt()}%", osc1Vol) }, tuneKnob = { val st = normToSemitones(osc1Tune).toInt(); SmartKnob("OSC1_TUNE", "TUNE", "${if (st > 0) "+$st" else st} st", osc1Tune) })
                 Spacer(modifier = Modifier.height(12.dp))
@@ -986,6 +1045,76 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
                 }
                 Spacer(modifier = Modifier.height(22.dp))
                 SmartKnob("MASTER", "VOLUME MASTER", "${(masterNorm * 100).toInt()}%", masterNorm)
+            }
+
+            } // Fim da Row do Moog
+        } else {
+            // ROLAND JUNO-6 NATIVE UI
+            Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                
+                // DCO MODULE
+                ModuleBox(title = "DCO (DIGITALLY CONTROLLED OSC)") {
+                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("RANGE", color = Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            listOf(0 to "16'", 1 to "8'", 2 to "4'").forEach { (idx, label) ->
+                                val selected = junoRange == idx
+                                Box(modifier = Modifier.background(if (selected) Color(0xFFEAB308) else Color(0xFF262930), RoundedCornerShape(4.dp)).clickable { junoRange = idx }.padding(horizontal = 12.dp, vertical = 6.dp).width(30.dp), contentAlignment = Alignment.Center) {
+                                    Text(label, color = if (selected) Color.Black else Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                            }
+                        }
+                        Box(modifier = Modifier.width(1.dp).height(100.dp).background(Color(0xFF334155)))
+                        SmartKnob("JUNO_PULSE", "PULSE", "${(junoPulseVol*100).toInt()}%", junoPulseVol)
+                        SmartKnob("JUNO_SAW", "SAW", "${(junoSawVol*100).toInt()}%", junoSawVol)
+                        SmartKnob("JUNO_SUB", "SUB", "${(junoSubVol*100).toInt()}%", junoSubVol)
+                        SmartKnob("JUNO_NOISE", "NOISE", "${(junoNoiseVol*100).toInt()}%", junoNoiseVol)
+                        Box(modifier = Modifier.width(1.dp).height(100.dp).background(Color(0xFF334155)))
+                        SmartKnob("JUNO_PWM", "PWM MOD", "${(junoPwm*100).toInt()}%", junoPwm)
+                    }
+                }
+
+                // FILTER MODULE (HPF + VCF)
+                ModuleBox(title = "VCF (VOLTAGE CONTROLLED FILTER)") {
+                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        SmartKnob("JUNO_HPF", "HPF FREQ", "${(junoHpf*100).toInt()}%", junoHpf)
+                        Box(modifier = Modifier.width(1.dp).height(80.dp).background(Color(0xFF334155)))
+                        SmartKnob("JUNO_CUTOFF", "FREQ", "${(junoVcfCutoff*100).toInt()}%", junoVcfCutoff)
+                        SmartKnob("JUNO_RES", "RES", "${(junoVcfRes*100).toInt()}%", junoVcfRes)
+                        SmartKnob("JUNO_ENV", "ENV AMT", "${(junoEnvAmt*100).toInt()}%", junoEnvAmt)
+                    }
+                }
+                
+                // CHORUS MODULE
+                ModuleBox(title = "BBD CHORUS") {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("MODE", color = Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Box(modifier = Modifier.background(if (junoChorus == 0) Color(0xFFEF4444) else Color(0xFF262930), RoundedCornerShape(4.dp)).clickable { junoChorus = 0 }.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                                Text("OFF", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                            Box(modifier = Modifier.background(if (junoChorus == 1 || junoChorus == 3) Color(0xFFEAB308) else Color(0xFF262930), RoundedCornerShape(4.dp)).clickable { junoChorus = if(junoChorus==2) 3 else 1 }.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                                Text(" I ", color = if(junoChorus==1||junoChorus==3) Color.Black else Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                            Box(modifier = Modifier.background(if (junoChorus == 2 || junoChorus == 3) Color(0xFFEAB308) else Color(0xFF262930), RoundedCornerShape(4.dp)).clickable { junoChorus = if(junoChorus==1) 3 else 2 }.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                                Text(" II ", color = if(junoChorus==2||junoChorus==3) Color.Black else Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+                
+                // ENVELOPE MODULE
+                ModuleBox(title = "ENV / VCA") {
+                    Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                        SmartKnob("A_ATK", "A", "${(aAttack * 2000).toInt()}ms", aAttack)
+                        SmartKnob("A_DEC", "D", "${(aDecay * 2000).toInt()}ms", aDecay)
+                        SmartKnob("A_SUS", "S", "${(aSustain * 100).toInt()}%", aSustain)
+                        SmartKnob("A_REL", "R", "${(aRelease * 3000).toInt()}ms", aRelease)
+                    }
+                }
             }
         }
     }
