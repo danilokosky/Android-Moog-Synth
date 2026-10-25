@@ -75,11 +75,11 @@ struct PhysicalCircuitConfig {
 };
 
 // ==============================================================================
-// 2. ESTRUTURA COMPARTILHADA DO JUNO-6
+// 2. CONFIGURAÇÃO DSP COMPARTILHADA DO JUNO-6
 // ==============================================================================
 struct JunoConfig {
-    int synthType = 0;
-    int range = 1;
+    int synthType = 0;       // 0 = Moog, 1 = Juno
+    int range = 1;           // 0=16', 1=8', 2=4'
     float pulseVol = 0.8f;
     float sawVol = 0.8f;
     float subVol = 0.5f;
@@ -89,7 +89,7 @@ struct JunoConfig {
     float vcfCutoff = 1000.0f;
     float vcfRes = 0.2f;
     float envAmt = 0.5f;
-    int chorusMode = 0;
+    int chorusMode = 0;      // 0=Off, 1=I, 2=II, 3=I+II
 };
 
 // ==============================================================================
@@ -163,7 +163,7 @@ public:
 };
 
 // ==============================================================================
-// 5. OSCILADOR VCO ANALÓGICO COM POLYBLEP
+// 5. OSCILADOR VCO ANALÓGICO COM POLYBLEP/BLAMP
 // ==============================================================================
 class Oscillator {
 public:
@@ -262,6 +262,7 @@ public:
         waveType = std::clamp(type, 0, 3);
     }
 
+    // Gera amostra com parâmetros físicos do capacitor integrador e comparador analógico
     inline float nextSample(int osFactor = 1, float capLeakage = 0.14f, float compThreshold = 0.488f) {
         double effSr = sampleRate * static_cast<double>(osFactor);
         double dt = frequency / effSr;
@@ -271,6 +272,7 @@ public:
         double sample = 0.0;
         switch (waveType) {
             case 0: {
+                // SAWTOOTH FÍSICA
                 double baseSaw = (2.0 * phase) - 1.0 - polyBlep4(phase, dt);
                 double rcCurveAmt = std::clamp(static_cast<double>(capLeakage), 0.0, 0.50);
                 double rcSag = 4.0 * (phase * (1.0 - phase) - (1.0 / 6.0) + dt * polyBlamp4(phase, dt));
@@ -278,6 +280,7 @@ public:
                 break;
             }
             case 1: {
+                // SQUARE FÍSICA
                 double pw = std::clamp(static_cast<double>(compThreshold), 0.15, 0.85);
                 double dcComp = (2.0 * pw) - 1.0;
                 sample = ((phase < pw) ? 1.0 : -1.0) - dcComp;
@@ -288,6 +291,7 @@ public:
                 break;
             }
             case 2: {
+                // TRIANGLE FÍSICA
                 double p = phase;
                 sample = 1.0 - 4.0 * std::fabs(p - 0.5);
                 double p2 = p + 0.5;
@@ -331,12 +335,15 @@ public:
 
         double out = 0.0;
 
+        // DCO SAW: True discharge capacitor model approximation (sounds thicker than pure saw)
         if (sawVol > 0.0f) {
             double saw = (2.0 * phase) - 1.0 - Oscillator::polyBlep4(phase, dt);
+            // Add a very subtle non-linear curve to simulate the Juno capacitor charging
             saw += 0.05 * (saw * saw - 1.0); 
             out += saw * sawVol;
         }
 
+        // DCO PULSE (PWM)
         if (pulseVol > 0.0f) {
             double pw = std::clamp(static_cast<double>(pwmMod), 0.05, 0.95);
             double dcComp = (2.0 * pw) - 1.0;
@@ -348,8 +355,10 @@ public:
             out += pulse * pulseVol;
         }
 
+        // SUB-OSCILLATOR: Perfectly phase-locked (it's a flip-flop triggered by the main DCO clock)
         if (subVol > 0.0f) {
-            double subPhase = phase * 0.5;
+            double subPhase = phase * 0.5; // Exactly half the frequency
+            // The Juno Sub is a perfect square wave 
             double sub = (subPhase < 0.5) ? 1.0 : -1.0;
             sub += Oscillator::polyBlep4(subPhase, dt * 0.5);
             double subPhase2 = subPhase + 0.5;
@@ -358,11 +367,13 @@ public:
             out += sub * subVol;
         }
 
+        // NOISE (Analog White Noise Generator)
         if (noiseVol > 0.0f) {
             double noise = ((double)rand() / RAND_MAX) * 2.0 - 1.0;
             out += noise * noiseVol;
         }
 
+        // Output with slight analog DC removal and gain staging (Juno DCOs are hot)
         return out * 0.55; 
     }
 };
@@ -396,6 +407,7 @@ private:
         int idx1 = static_cast<int>(readPos);
         int idx2 = (idx1 + 1) % size;
         
+        // Hermite Interpolation provides much less high-end loss than linear, critical for Chorus
         int idx0 = (idx1 - 1 + size) % size;
         int idx3 = (idx1 + 2) % size;
         
@@ -410,9 +422,10 @@ private:
         return ((c3 * frac + c2) * frac + c1) * frac + c0;
     }
     
-    inline double triWave(double p) {
-        double pp = p - std::floor(p);
-        return (pp < 0.5) ? (pp * 2.0) : (2.0 - pp * 2.0);
+    // Triangle wave generator: 0 to 1 to 0
+    inline double triWave(double phase) {
+        double p = phase - std::floor(phase);
+        return (p < 0.5) ? (p * 2.0) : (2.0 - p * 2.0);
     }
     
 public:
@@ -429,23 +442,26 @@ public:
     }
     
     void processStereo(float& outL, float& outR, int mode, double sr) {
-        if (mode == 0) return;
+        if (mode == 0) return; // Chorus OFF
         
+        // Juno-6 Chorus characteristics
         double rate = 0.5;
         double depth = 1.5; 
         double baseDelayMs = 2.5;
         
         if (mode == 1) { rate = 0.4; depth = 1.0; }
         else if (mode == 2) { rate = 0.83; depth = 1.5; }
-        else if (mode == 3) { rate = 1.2; depth = 2.5; }
+        else if (mode == 3) { rate = 1.2; depth = 2.5; } // I+II is faster and deeper
         
         lfoPhase += (rate / sr);
         if (lfoPhase >= 1.0) lfoPhase -= 1.0;
         
+        // Use triangle wave for authentic Juno chorus modulation
         double modL = triWave(lfoPhase) * 2.0 - 1.0; 
-        double modR = triWave(lfoPhase + 0.5) * 2.0 - 1.0;
+        double modR = triWave(lfoPhase + 0.5) * 2.0 - 1.0; // 180 degrees offset
         
         if (mode == 3) {
+            // Mode I+II has a more chaotic mix
             modL = sin(2.0 * M_PI * lfoPhase);
             modR = sin(2.0 * M_PI * lfoPhase + M_PI);
         }
@@ -459,8 +475,9 @@ public:
         float delayedL = readFractional(bufferL, delaySamplesL);
         float delayedR = readFractional(bufferR, delaySamplesR);
         
-        bufferL[writeIdx] = outL;
+        bufferL[writeIdx] = outL; // Store dry signal
         bufferR[writeIdx] = outR;
+        
         writeIdx = (writeIdx + 1) % bufferL.size();
         
         outL = outL * 0.707f + delayedL * 0.707f;
@@ -1022,26 +1039,33 @@ public:
         // ==========================================
         if (juno.synthType == 1) {
             float jCutoffHz = std::max(juno.vcfCutoff * exp2f(envOctaves * juno.envAmt + lfoModOctaves + keyTrackOctaves), 40.0f);
-            vcf.prepareFrame(jCutoffHz, juno.vcfRes, driveNorm, os, phys.thermalVoltageVt, phys.transistorMismatch);
-            junoDco.setFrequency(440.0f * exp2f((static_cast<float>(currentNote) - 69.0f) / 12.0f), static_cast<double>(sampleRate * os));
+            
+            // Apply Analog Drift, PSU Sag, and LFO Vibrato to the Juno DCO Master Clock
+            float totalJunoDetuneSt = (lfoModOctaves * 0.4f) + (oscDriftSt[0] * driftAmount * 0.35f) - (sagEffect * 0.12f);
+            float baseJunoFreq = 440.0f * exp2f((static_cast<float>(currentNote) + totalJunoDetuneSt - 69.0f) / 12.0f);
+            junoDco.setFrequency(baseJunoFreq, 48000.0 * os);
+            
+            // Adjust the filter for Roland IR3109 character (slightly less drive distortion natively)
+            vcf.prepareFrame(jCutoffHz, juno.vcfRes, driveNorm * 0.5f, os, phys.thermalVoltageVt, phys.transistorMismatch * 0.5f);
+            
+            // Juno PWM Modulation (Base + LFO)
+            float pwmEff = juno.pwm + (lfoModOctaves * 0.35f);
 
             float filtered = 0.0f;
-            double pwmEff = static_cast<double>(juno.pwm) + (lfoModOctaves * 0.15);
-
             if (os == 4) {
                 double srOS = sampleRate * 4.0;
-                double y0 = vcf.stepSubSample(static_cast<float>(junoHpfFilter.process(junoDco.process(juno.range, juno.pulseVol, juno.sawVol, juno.subVol, juno.noiseVol, pwmEff), juno.hpfCutoff, srOS)));
-                double y1 = vcf.stepSubSample(static_cast<float>(junoHpfFilter.process(junoDco.process(juno.range, juno.pulseVol, juno.sawVol, juno.subVol, juno.noiseVol, pwmEff), juno.hpfCutoff, srOS)));
-                double y2 = vcf.stepSubSample(static_cast<float>(junoHpfFilter.process(junoDco.process(juno.range, juno.pulseVol, juno.sawVol, juno.subVol, juno.noiseVol, pwmEff), juno.hpfCutoff, srOS)));
-                double y3 = vcf.stepSubSample(static_cast<float>(junoHpfFilter.process(junoDco.process(juno.range, juno.pulseVol, juno.sawVol, juno.subVol, juno.noiseVol, pwmEff), juno.hpfCutoff, srOS)));
+                double y0 = vcf.stepSubSample(junoHpfFilter.process(junoDco.process(juno.range, juno.pulseVol, juno.sawVol, juno.subVol, juno.noiseVol, pwmEff), juno.hpfCutoff, srOS));
+                double y1 = vcf.stepSubSample(junoHpfFilter.process(junoDco.process(juno.range, juno.pulseVol, juno.sawVol, juno.subVol, juno.noiseVol, pwmEff), juno.hpfCutoff, srOS));
+                double y2 = vcf.stepSubSample(junoHpfFilter.process(junoDco.process(juno.range, juno.pulseVol, juno.sawVol, juno.subVol, juno.noiseVol, pwmEff), juno.hpfCutoff, srOS));
+                double y3 = vcf.stepSubSample(junoHpfFilter.process(junoDco.process(juno.range, juno.pulseVol, juno.sawVol, juno.subVol, juno.noiseVol, pwmEff), juno.hpfCutoff, srOS));
                 filtered = vcf.decimate4x(y0, y1, y2, y3);
             } else if (os == 2) {
                 double srOS = sampleRate * 2.0;
-                double y0 = vcf.stepSubSample(static_cast<float>(junoHpfFilter.process(junoDco.process(juno.range, juno.pulseVol, juno.sawVol, juno.subVol, juno.noiseVol, pwmEff), juno.hpfCutoff, srOS)));
-                double y1 = vcf.stepSubSample(static_cast<float>(junoHpfFilter.process(junoDco.process(juno.range, juno.pulseVol, juno.sawVol, juno.subVol, juno.noiseVol, pwmEff), juno.hpfCutoff, srOS)));
+                double y0 = vcf.stepSubSample(junoHpfFilter.process(junoDco.process(juno.range, juno.pulseVol, juno.sawVol, juno.subVol, juno.noiseVol, pwmEff), juno.hpfCutoff, srOS));
+                double y1 = vcf.stepSubSample(junoHpfFilter.process(junoDco.process(juno.range, juno.pulseVol, juno.sawVol, juno.subVol, juno.noiseVol, pwmEff), juno.hpfCutoff, srOS));
                 filtered = vcf.decimate2x(y0, y1);
             } else {
-                filtered = static_cast<float>(vcf.stepSubSample(static_cast<float>(junoHpfFilter.process(junoDco.process(juno.range, juno.pulseVol, juno.sawVol, juno.subVol, juno.noiseVol, pwmEff), juno.hpfCutoff, sampleRate))));
+                filtered = vcf.stepSubSample(junoHpfFilter.process(junoDco.process(juno.range, juno.pulseVol, juno.sawVol, juno.subVol, juno.noiseVol, pwmEff), juno.hpfCutoff, sampleRate));
             }
 
             float vcaOut = filtered * aEnvVal * velFactor;
@@ -1129,40 +1153,4 @@ private:
 
     // Parâmetros do Roland Juno-6
     std::atomic<int> synthType{0};
-    std::atomic<int> junoRange{1};
-    std::atomic<float> junoPulseVol{0.8f};
-    std::atomic<float> junoSawVol{0.8f};
-    std::atomic<float> junoSubVol{0.5f};
-    std::atomic<float> junoNoiseVol{0.0f};
-    std::atomic<float> junoPwm{0.5f};
-    std::atomic<float> junoHpfCutoff{20.0f};
-    std::atomic<float> junoVcfCutoff{1000.0f};
-    std::atomic<float> junoVcfRes{0.2f};
-    std::atomic<float> junoEnvAmt{0.5f};
-    std::atomic<int> junoChorusMode{0};
-
-    std::atomic<bool> paramSmoothing{true};
-
-    std::atomic<float> thermalVoltageVt{0.026f};
-    std::atomic<float> transistorMismatch{0.020f};
-    std::atomic<float> capacitorLeakage{0.14f};
-    std::atomic<float> comparatorThreshold{0.488f};
-    std::atomic<float> envSupplyVoltage{1.12f};
-    std::atomic<float> powerSupplySag{0.08f};
-    std::atomic<float> tapeMotorInertia{0.50f};
-    std::atomic<float> tapeMotorFriction{0.20f};
-    std::atomic<float> tapeMagneticBias{0.25f};
-
-    std::atomic<float> ampA{0.008f}, ampD{0.3f}, ampS{0.8f}, ampR{0.25f};
-    std::atomic<float> fltA{0.008f}, fltD{0.25f}, fltS{0.35f}, fltR{0.25f};
-    std::atomic<bool> envParamsDirty{false};
-
-    float smoothCutoff = 2500.0f, smoothRes = 0.20f, smoothMaster = 0.85f;
-    float smoothOscVol[3] = {0.80f, 0.65f, 0.55f};
-    std::atomic<int> activeVoiceCount{0};
-
-    static const int SCOPE_SIZE = 256;
-    std::array<float, SCOPE_SIZE> scopeBuffer{};
-    std::atomic<int> scopeWriteIndex{0};
-
-    void handleNoteOn(int note,
+    std::atomic<int> junoRange{
