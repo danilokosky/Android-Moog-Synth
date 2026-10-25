@@ -1115,6 +1115,23 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
                         }
                     }
                 }
+                // MODULAÇÃO (LFO) E DELAY
+                ModuleBox(title = "MODULAÇÃO & DELAY") {
+                    Text("LFO GLOBAL (DCO & PWM)", color = Color(0xFF94A3B8), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(22.dp)) {
+                        SmartKnob("LFO_RATE", "LFO RATE", "${"%.1f".format(0.1f + lfoRateNorm * 19.9f)} Hz", lfoRateNorm)
+                        SmartKnob("LFO_DEPTH", "LFO DEPTH", "${(lfoDepthNorm * 100).toInt()}%", lfoDepthNorm)
+                    }
+                    Spacer(modifier = Modifier.height(18.dp))
+                    Text("PARALLEL SEND TAPE DELAY", color = Color(0xFF94A3B8), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                        SmartKnob("DELAY_TIME", "TIME", "${((0.05f + delayTimeNorm * 0.95f) * 1000).toInt()}ms", delayTimeNorm)
+                        SmartKnob("DELAY_FB", "FEEDBACK", "${(delayFbNorm * 100).toInt()}%", delayFbNorm)
+                        SmartKnob("DELAY_MIX", "MIX", "${(delayMixNorm * 100).toInt()}%", delayMixNorm)
+                    }
+                }
                 
                 // ENVELOPE MODULE
                 ModuleBox(title = "ENV / VCA") {
