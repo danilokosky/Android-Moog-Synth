@@ -965,7 +965,44 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
             }
         }
 
-        Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        val activeSynthType = if (currentLayer == 0) synthTypeA else synthTypeB
+        
+        LaunchedEffect(activeSynthType) {
+            audioEngine.setSynthType(activeSynthType)
+            val lastPreset = presetsList.find { it.synthType == activeSynthType }
+            if (lastPreset != null && currentPresetId != lastPreset.id) {
+                applyPresetToEngine(lastPreset)
+            }
+        }
+
+        // --- TABS (LAYER A / LAYER B) ---
+        Row(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp), horizontalArrangement = Arrangement.Center) {
+            Box(modifier = Modifier.background(Color(0xFF181B20), RoundedCornerShape(8.dp)).border(1.dp, Color(0xFF334155), RoundedCornerShape(8.dp)).padding(4.dp)) {
+                Row {
+                    Box(modifier = Modifier.background(if (currentLayer == 0) Color(0xFFF59E0B) else Color.Transparent, RoundedCornerShape(6.dp)).clickable { currentLayer = 0 }.padding(horizontal = 24.dp, vertical = 8.dp)) {
+                        Text("LAYER A", color = if (currentLayer == 0) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                    }
+                    Box(modifier = Modifier.background(if (currentLayer == 1) Color(0xFF0284C7) else Color.Transparent, RoundedCornerShape(6.dp)).clickable { currentLayer = 1 }.padding(horizontal = 24.dp, vertical = 8.dp)) {
+                        Text("LAYER B", color = if (currentLayer == 1) Color.White else Color.Gray, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+        
+        // --- SYNTH SELECTOR ---
+        Row(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp), horizontalArrangement = Arrangement.Center) {
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Box(modifier = Modifier.background(if (activeSynthType == 0) Color(0xFF334155) else Color(0xFF111317), RoundedCornerShape(8.dp)).clickable { if (currentLayer == 0) synthTypeA = 0 else synthTypeB = 0 }.padding(horizontal = 16.dp, vertical = 10.dp)) {
+                    Text("🎛️ MOOG POLY-D", color = if (activeSynthType == 0) Color.White else Color.Gray, fontWeight = FontWeight.Bold)
+                }
+                Box(modifier = Modifier.background(if (activeSynthType == 1) Color(0xFF7E22CE) else Color(0xFF111317), RoundedCornerShape(8.dp)).clickable { if (currentLayer == 0) synthTypeA = 1 else synthTypeB = 1 }.padding(horizontal = 16.dp, vertical = 10.dp)) {
+                    Text("🎹 ROLAND JUNO-6", color = if (activeSynthType == 1) Color.White else Color.Gray, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+
+        if (activeSynthType == 0) {
+            Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             ModuleBox(title = "OSCILADORES 64-BIT (POLYBLEP/BLAMP)") {
                 OscillatorRow(label = "OSC 1", wave = osc1Wave, onWaveChange = { osc1Wave = it; audioEngine.setOscWave(0, it); isPresetDirty = true }, levelKnob = { SmartKnob("OSC1_VOL", "LEVEL", "${(osc1Vol * 100).toInt()}%", osc1Vol) }, tuneKnob = { val st = normToSemitones(osc1Tune).toInt(); SmartKnob("OSC1_TUNE", "TUNE", "${if (st > 0) "+$st" else st} st", osc1Tune) })
                 Spacer(modifier = Modifier.height(12.dp))
