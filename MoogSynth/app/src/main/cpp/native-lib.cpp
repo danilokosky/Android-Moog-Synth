@@ -9,7 +9,7 @@
 #include <mutex>
 #include <thread>
 
-// Saturação suave Padé (usada apenas quando Drive > 0 ou no loop de feedback de alta ressonância)
+// Saturação suave Padé (usada no feedback do Ladder para estabilização de auto-oscilação e saturação analógica)
 static inline float fastTanh(float x) {
     if (x < -3.0f) return -1.0f;
     if (x > 3.0f) return 1.0f;
@@ -17,35 +17,7 @@ static inline float fastTanh(float x) {
     return x * (27.0f + x2) / (27.0f + 9.0f * x2);
 }
 
-// Clipper de Feedback Linear-Core para o Filtro Ladder:
-// Mantém 100% de linearidade matemática para sinais até +-1.2 (sem comprimir a onda),
-// limitando suavemente apenas auto-oscilações de alta ressonância.
-static inline float linearCoreClip(float x) {
-    const float linearThreshold = 1.20f;
-    float absX = fabsf(x);
-    if (absX <= linearThreshold) {
-        return x;
-    }
-    float sign = (x >= 0.0f) ? 1.0f : -1.0f;
-    float excess = (absX - linearThreshold) * 0.5f;
-    return sign * (linearThreshold + 0.80f * fastTanh(excess));
-}
-
-// Proteção Transparente de Teto do DAC (True Peak Safety Ceiling):
-// O sinal é 100% INTOCADO e LINEAR (out == in) até 0.95 (-0.4 dBFS).
-// Apenas picos extremos acima de 0.95 são arredondados para evitar wrap digital no hardware.
-static inline float pureMasterSafetyCeiling(float x) {
-    const float ceiling = 0.95f;
-    float absX = fabsf(x);
-    if (absX <= ceiling) {
-        return x;
-    }
-    float sign = (x >= 0.0f) ? 1.0f : -1.0f;
-    float excess = (absX - ceiling) / (1.0f - ceiling);
-    return sign * (ceiling + (1.0f - ceiling) * fastTanh(excess));
-}
-
-// Bloqueador de DC de 1ª ordem ultra-transparente (corte sub-audível em ~1.5Hz)
+// Bloqueador de DC ultra-transparente de 1ª ordem (sub-audível ~1.0Hz, 0.0dB a partir de 20Hz)
 class DCBlocker {
 private:
     double x1 = 0.0;
@@ -54,14 +26,14 @@ public:
     void clear() { x1 = 0.0; y1 = 0.0; }
     float process(float x) {
         double in = static_cast<double>(x);
-        double y = in - x1 + 0.99975 * y1;
+        double y = in - x1 + 0.99985 * y1;
         x1 = in;
         y1 = y;
         return static_cast<float>(y);
     }
 };
 
-// --- OSCILADOR DE PRECISÃO 64-BIT COM POLYBLEP & POLYBLAMP PURO ---
+// --- OSCILADOR ANALÓGICO 64-BIT COM POLYBLEP / POLYBLAMP INTEGRADO ---
 class Oscillator {
 private:
     double sampleRate = 48000.0;
@@ -122,7 +94,7 @@ public:
                 sample -= polyBlep(phase, dt);
                 break;
             }
-            case 1: { // Square Pura (50% Duty) com PolyBLEP nas duas bordas
+            case 1: { // Square Pura (50% Duty) com PolyBLEP em ambas as bordas
                 sample = (phase < 0.5) ? 1.0 : -1.0;
                 sample += polyBlep(phase, dt);
                 double phase2 = phase + 0.5;
@@ -130,7 +102,7 @@ public:
                 sample -= polyBlep(phase2, dt);
                 break;
             }
-            case 2: { // Triangle Pura com correção de inflexão PolyBLAMP
+            case 2: { // Triangle Pura com correção PolyBLAMP nas inflexões
                 double p = phase;
                 sample = 1.0 - 4.0 * std::fabs(p - 0.5);
                 double p2 = p + 0.5;
@@ -138,7 +110,7 @@ public:
                 sample += 4.0 * dt * (polyBlamp(p, dt) - polyBlamp(p2, dt));
                 break;
             }
-            case 3: // Sine Matemática Pura
+            case 3: // Sine Analógica Pura
             default: {
                 sample = std::sin(2.0 * M_PI * phase);
                 break;
@@ -148,7 +120,7 @@ public:
     }
 };
 
-// --- ENVELOPE ADSR ANALÓGICO RC ---
+// --- ENVELOPE RC EXPONENCIAL (ADSR ANALÓGICO MOOG) ---
 class Envelope {
 private:
     float sampleRate = 48000.0f;
@@ -229,8 +201,9 @@ public:
     }
 };
 
-// --- FILTRO MOOG LADDER 24dB TPT (ZERO-DELAY FEEDBACK LINEAR-CORE) ---
-// Sem interpolação linear passa-baixas na entrada e sem compressão/achatamento forçado!
+// --- FILTRO MOOG LADDER 24dB TPT COM COMPENSAÇÃO INTEGRAL DE GRAVES ---
+// Zero-Delay Feedback Trapezoidal (ZDF) com compensação de graves (DC Passband)
+// e saturação analógica de transistores no loop de realimentação.
 class MoogLadderFilter {
 private:
     float sampleRate = 48000.0f;
@@ -250,10 +223,9 @@ public:
         int os = std::clamp(oversampleFactor, 1, 4);
         double effSr = static_cast<double>(sampleRate) * static_cast<double>(os);
 
-        // Frequência de corte exata (preserva transparência total quando aberto)
         double fc = std::clamp(static_cast<double>(cutoffHz), 20.0, static_cast<double>(sampleRate) * 0.46);
 
-        // Integrador Trapezoidal Zero-Delay Feedback (TPT)
+        // Integrador Trapezoidal ZDF (Topology-Preserving Transform)
         double g = std::tan(M_PI * fc / effSr);
         double G = g / (1.0 + g);
         double G2 = G * G;
@@ -263,27 +235,28 @@ public:
         double resNorm = std::clamp(static_cast<double>(resonance), 0.0, 1.0);
         double k = std::pow(resNorm, 1.25) * 3.85;
 
-        // Entrada 100% PURA E LINEAR quando Drive está em 0.0!
-        // Só aplica saturação se o usuário aumentar deliberadamente o controle de Filter Drive.
-        double x = static_cast<double>(input);
+        // COMPENSAÇÃO DE GRAVES MOOG AUTÊNTICA (DC PASSBAND COMPENSATION):
+        // No Ladder 4-polos analógico, o ganho estático DC cai para 1 / (1 + k).
+        // Ao compensar a entrada por (1 + k * 0.85), a fundamental das notas graves
+        // PERMANECE 100% FORTE, GORDA E PRESENTE mesmo com ressonância alta!
+        double passbandComp = 1.0 + (k * 0.85);
+
+        // Entrada Linear Pura por padrão; Saturação analógica suave apenas se Filter Drive for aumentado
+        double inSignal = static_cast<double>(input);
         if (driveNorm > 0.005f) {
-            float drv = 1.0f + (driveNorm * 2.0f);
-            x = static_cast<double>(fastTanh(input * drv) / fastTanh(drv));
+            float drv = 1.0f + (driveNorm * 2.2f);
+            inSignal = static_cast<double>(fastTanh(input * drv) / fastTanh(drv));
         }
 
-        // Compensação limpa de passband em Zero-Delay Feedback:
-        // No filtro Ladder ideal, o ganho DC cai por 1/(1 + k).
-        // Multiplicar a entrada por (1 + k * 0.25) restaura o nível sem saturar a entrada!
-        double cleanPassbandComp = 1.0 + (k * 0.25);
-        double xComp = x * cleanPassbandComp;
-
+        double x = inSignal * passbandComp;
         double out = 0.0;
         double invOnePlusKG4 = 1.0 / (1.0 + k * G4);
 
         for (int step = 0; step < os; ++step) {
             double S = (G3 * s[0]) + (G2 * s[1]) + (G * s[2]) + s[3];
-            double fb = static_cast<double>(linearCoreClip(static_cast<float>(S)));
-            double u = (xComp - k * fb) * invOnePlusKG4;
+            // Saturação de transistor no feedback (contém o pico de ressonância sem matar o grave)
+            double fb = static_cast<double>(fastTanh(static_cast<float>(S)));
+            double u = (x - k * fb) * invOnePlusKG4;
 
             double v0 = (u - s[0]) * G;
             double y0 = v0 + s[0];
@@ -308,7 +281,7 @@ public:
     }
 };
 
-// --- MASTER STUDIO TAPE DELAY (PARALELO SEND/RETURN, SINAL DRY 100% INTOCADO) ---
+// --- STEREO TAPE DELAY PARALELO (SEND/RETURN LIMPO) ---
 class AnalogDelay {
 private:
     std::vector<float> bufferL;
@@ -346,7 +319,6 @@ public:
     }
 
     void processStereo(float inL, float inR, float delayTimeSec, float feedback, float mix, float stereoSpread, float& outL, float& outR) {
-        // Quando o Mix está zerado, retorna o sinal Dry 100% bit-a-bit puro!
         if (mix <= 0.001f || bufferL.empty()) {
             outL = inL;
             outR = inR;
@@ -358,9 +330,9 @@ public:
         flutterPhase += 5.2f / sampleRate;
         if (flutterPhase >= 1.0f) flutterPhase -= 1.0f;
 
-        float modDepth = 0.25f + (stereoSpread * 0.75f);
-        float tapeModSec = ((sinf(2.0f * static_cast<float>(M_PI) * wowPhase) * 0.00035f) +
-                            (sinf(2.0f * static_cast<float>(M_PI) * flutterPhase) * 0.00008f)) * modDepth;
+        float modDepth = 0.20f + (stereoSpread * 0.80f);
+        float tapeModSec = ((sinf(2.0f * static_cast<float>(M_PI) * wowPhase) * 0.00030f) +
+                            (sinf(2.0f * static_cast<float>(M_PI) * flutterPhase) * 0.00007f)) * modDepth;
 
         float maxDelaySamples = static_cast<float>(bufferL.size()) - 4.0f;
         float delaySamplesL = std::clamp((delayTimeSec + tapeModSec) * sampleRate, 2.0f, maxDelaySamples);
@@ -369,17 +341,16 @@ public:
         float rawL = readFractional(bufferL, delaySamplesL);
         float rawR = readFractional(bufferR, delaySamplesR);
 
-        // Filtro High-Pass/Low-Pass APENAS nas repetições (Wet) do eco
         hpStateL += 0.015f * (rawL - hpStateL);
         hpStateR += 0.015f * (rawR - hpStateR);
         float bandL = rawL - hpStateL;
         float bandR = rawR - hpStateR;
 
-        lpStateL += 0.48f * (bandL - lpStateL);
-        lpStateR += 0.48f * (bandR - lpStateR);
+        lpStateL += 0.45f * (bandL - lpStateL);
+        lpStateR += 0.45f * (bandR - lpStateR);
 
         float fb = std::clamp(feedback, 0.0f, 0.90f);
-        float cross = stereoSpread * 0.18f;
+        float cross = stereoSpread * 0.15f;
         float fbSignalL = lpStateL * (1.0f - cross) + lpStateR * cross;
         float fbSignalR = lpStateR * (1.0f - cross) + lpStateL * cross;
 
@@ -387,17 +358,18 @@ public:
         bufferR[writeIdx] = fastTanh(inR + fbSignalR * fb);
         writeIdx = (writeIdx + 1) % static_cast<int>(bufferL.size());
 
-        // Dry 100% íntegro + retorno paralelo Wet
-        outL = inL + (lpStateL * mix * 0.75f);
-        outR = inR + (lpStateR * mix * 0.75f);
+        // Retorno paralelo limpo sem alterar o sinal Dry original
+        outL = inL + (lpStateL * mix * 0.70f);
+        outR = inR + (lpStateR * mix * 0.70f);
     }
 };
 
-// --- VOZ POLIFÔNICA DE ALTA PUREZA (FASE COERENTE E CANAIS PUROS) ---
+// --- VOZ POLIFÔNICA MOOG AUTÊNTICA (MIXER 3-OSC -> MOOG VCF DA VOZ -> VCA) ---
+// Arquitetura clássica com sinergia absoluta entre frequências e preservação integral dos graves
 class Voice {
 private:
     Oscillator osc[3];
-    MoogLadderFilter vcf[3]; // 1 filtro TPT linear por canal (mesmo Cutoff = Zero rotação de fase diferencial!)
+    MoogLadderFilter vcf; // 1 Filtro Moog Ladder 24dB dedicado por voz (como no Minimoog original!)
     Envelope ampEnv;
     Envelope filterEnv;
     float sampleRate = 48000.0f;
@@ -421,15 +393,14 @@ public:
         for (int c = 0; c < 3; ++c) {
             osc[c].init(sr, 0.0);
             oscDriftSt[c] = 0.0f;
-            vcf[c].init(sr);
         }
         osc[0].setWaveType(0);
         osc[1].setWaveType(1);
         osc[2].setWaveType(2);
 
+        vcf.init(sr);
         ampEnv.init(sr);
         ampEnv.setADSR(0.008f, 0.3f, 0.8f, 0.25f);
-
         filterEnv.init(sr);
         filterEnv.setADSR(0.008f, 0.25f, 0.35f, 0.25f);
     }
@@ -437,9 +408,7 @@ public:
     void updateFrequencies(const float* oscTunes, float driftAmount) {
         if (currentNote < 0) return;
         for (int c = 0; c < 3; ++c) {
-            // Drift máximo limitado a +-3.5 cents (0.035 semitons) apenas se driftAmount > 0,
-            // evitando desafinação grosseira ou batimento destrutivo entre os osciladores.
-            float totalDetuneSt = oscTunes[c] + (oscDriftSt[c] * driftAmount * 0.35f);
+            float totalDetuneSt = oscTunes[c] + (oscDriftSt[c] * driftAmount * 0.30f);
             float freq = 440.0f * exp2f((static_cast<float>(currentNote) + totalDetuneSt - 69.0f) / 12.0f);
             osc[c].setFrequency(freq);
         }
@@ -447,11 +416,9 @@ public:
 
     void noteOn(int note, int velocity, const float* oscTunes, float driftAmount, uint64_t noteAge) {
         if (ampEnv.isIdle()) {
-            for (int c = 0; c < 3; ++c) {
-                vcf[c].reset();
-                // Inicia os 3 osciladores em fase coerente (0.0) para ataque definido e zero cancelamento!
-                osc[c].resetPhase(0.0);
-            }
+            vcf.reset();
+            // Disparo inicial em fase coerente para ataque sólido e sem cancelamentos
+            for (int c = 0; c < 3; ++c) osc[c].resetPhase(0.0);
         }
         currentNote = note;
         noteVelocity = std::clamp(static_cast<float>(velocity) / 127.0f, 0.05f, 1.0f);
@@ -472,9 +439,7 @@ public:
         currentNote = -1;
         ampEnv.kill();
         filterEnv.kill();
-        for (int c = 0; c < 3; ++c) {
-            vcf[c].reset();
-        }
+        vcf.reset();
     }
 
     void setWaveType(int index, int type) {
@@ -487,10 +452,10 @@ public:
     int getNote() const { return currentNote; }
     uint64_t getAge() const { return age; }
 
-    // Renderiza os 3 canais de Oscilador de forma 100% PURA, LINEAR e COERENTE EM FASE:
-    // - Sem bassShelfState (+60% de grave artificial removido!)
-    // - Sem pré-clipping fastTanh forçado no filtro!
-    // - Mesmo Cutoff sincronizado nos 3 canais da voz (Zero cancelamento de fase na Master!)
+    // RENDERIZAÇÃO MOOG AUTÊNTICA:
+    // 1. Os 3 osciladores são somados no Mixer analógico da voz;
+    // 2. Passam juntos pelo filtro Moog Ladder VCF da voz (mesma fase, mesma resposta);
+    // 3. Key Tracking inteligente: abre nos agudos, mas NUNCA estrangula os graves!
     void renderChannels(
         const float* oscVols,
         const float* oscTunes,
@@ -515,7 +480,7 @@ public:
         if ((++driftCounter & 63) == 0) {
             for (int c = 0; c < 3; ++c) {
                 oscDriftSt[c] = (oscDriftSt[c] * 0.995f) + (nextWhiteNoise() * 0.005f);
-                oscDriftSt[c] = std::clamp(oscDriftSt[c], -0.10f, 0.10f);
+                oscDriftSt[c] = std::clamp(oscDriftSt[c], -0.08f, 0.08f);
             }
             updateFrequencies(oscTunes, driftAmount);
         }
@@ -524,40 +489,52 @@ public:
         float aEnvVal = ampEnv.nextLevel();
 
         float velFactor = (1.0f - velSensAmount) + (noteVelocity * velSensAmount);
-        float velFilterBoost = (1.0f - velSensAmount * 0.4f) + (noteVelocity * velSensAmount * 0.4f);
+        float velFilterBoost = (1.0f - velSensAmount * 0.35f) + (noteVelocity * velSensAmount * 0.35f);
         float envOctaves = (filterEnvAmtHz / 5000.0f) * 4.5f * fEnvVal * velFilterBoost;
 
-        // Keyboard Tracking 1V/Oct autêntico baseado na nota tocada (sincronizado para os 3 osciladores!)
+        // KEYBOARD TRACKING ASSIMÉTRICO (MOOG REAL):
+        // Se a nota for aguda (offset >= 0), abre o filtro para brilho.
+        // Se a nota for GRAVE (offset < 0), NÃO estrangula o corte no chão (fator 0.15)!
+        // Isso garante que o peso da fundamental e dos graves permaneça 100% INTACTO!
         float noteOffset = static_cast<float>(currentNote) - 60.0f;
-        float keyTrackOctaves = (noteOffset / 12.0f) * keyTrackAmount;
+        float keyTrackOctaves = (noteOffset >= 0.0f)
+            ? ((noteOffset / 12.0f) * keyTrackAmount)
+            : ((noteOffset / 12.0f) * keyTrackAmount * 0.15f);
 
         float totalOctaves = envOctaves + lfoModOctaves + keyTrackOctaves;
-        float voiceCutoff = baseCutoff * exp2f(totalOctaves);
+        // Piso protetor de graves em 45 Hz para jamais cortar a fundamental
+        float voiceCutoff = std::max(baseCutoff * exp2f(totalOctaves), 45.0f);
 
-        float vcaGain = aEnvVal * velFactor;
+        // 1. Gera as 3 formas de onda dos osciladores
+        float s0 = osc[0].nextSample() * oscVols[0];
+        float s1 = osc[1].nextSample() * oscVols[1];
+        float s2 = osc[2].nextSample() * oscVols[2];
 
-        for (int c = 0; c < 3; ++c) {
-            float vol = oscVols[c];
-            float rawOsc = osc[c].nextSample();
+        // 2. Soma analógica no Mixer da voz antes do filtro (Sinergia Total dos 3 OSCs)
+        float totalVol = oscVols[0] + oscVols[1] + oscVols[2];
+        float mixScale = (totalVol > 0.001f) ? (1.0f / sqrtf(std::max(1.0f, totalVol))) : 0.0f;
+        float mixedInput = (s0 + s1 + s2) * (mixScale * 0.65f);
 
-            if (vol <= 0.0005f) {
-                // Mantém o estado do filtro atualizado em silêncio para evitar transientes ao abrir o volume
-                vcf[c].process(0.0f, voiceCutoff, resonance, driveNorm, oversampleFactor);
-                outCh[c] = 0.0f;
-                continue;
-            }
+        // 3. Processa a soma pelo Filtro Moog Ladder 24dB da voz
+        float filteredMix = vcf.process(mixedInput, voiceCutoff, resonance, driveNorm, oversampleFactor);
 
-            // Cada oscilador entra com seu volume exato no seu filtro TPT linear sincronizado,
-            // saindo direto para o VCA sem nenhum shelf de sub-grave ou compressor!
-            float channelSignal = rawOsc * vol;
-            float filteredCh = vcf[c].process(channelSignal, voiceCutoff, resonance, driveNorm, oversampleFactor);
+        // 4. Aplica o VCA da voz
+        float vcaOut = filteredMix * aEnvVal * velFactor;
 
-            outCh[c] = filteredCh * vcaGain;
+        // 5. Distribui para os 3 canais proporcionalmente ao volume de cada oscilador,
+        // permitindo que o controle de Stereo Spread no barramento estéreo funcione com perfeição!
+        if (totalVol > 0.001f) {
+            float invTotal = 1.0f / totalVol;
+            outCh[0] = vcaOut * (oscVols[0] * invTotal);
+            outCh[1] = vcaOut * (oscVols[1] * invTotal);
+            outCh[2] = vcaOut * (oscVols[2] * invTotal);
+        } else {
+            outCh[0] = outCh[1] = outCh[2] = 0.0f;
         }
     }
 };
 
-// --- MOTOR OBOE COM BARRAMENTO MASTER 100% PURO E LOCK-FREE PARAMS ---
+// --- MOTOR OBOE COM HEADROOM POLIFÔNICO ADAPTATIVO (ZERO ESMAGAMENTO DE GRAVES) ---
 class AudioEngine : public oboe::AudioStreamDataCallback, public oboe::AudioStreamErrorCallback {
 private:
     std::shared_ptr<oboe::AudioStream> stream;
@@ -572,15 +549,14 @@ private:
     std::mutex voiceMutex;
     uint64_t voiceCounter = 0;
 
-    // Parâmetros de Oscilador em std::atomic para nunca travar a thread de áudio ao girar knobs!
-    std::atomic<float> oscVolumes[3] = { {0.75f}, {0.60f}, {0.50f} };
+    std::atomic<float> oscVolumes[3] = { {0.80f}, {0.65f}, {0.55f} };
     std::atomic<float> oscTunes[3] = { {0.0f}, {0.0f}, {-12.0f} };
     std::atomic<int> oscWaves[3] = { {0}, {1}, {2} };
 
     std::atomic<float> masterVolume{0.85f};
-    std::atomic<float> filterCutoff{2800.0f};
+    std::atomic<float> filterCutoff{2500.0f};
     std::atomic<float> filterResonance{0.20f};
-    std::atomic<float> filterEnvAmount{2500.0f};
+    std::atomic<float> filterEnvAmount{2200.0f};
     std::atomic<float> lfoRate{2.5f}, lfoDepth{0.0f};
     std::atomic<float> delayTime{0.32f}, delayFeedback{0.35f}, delayMix{0.0f};
 
@@ -589,8 +565,9 @@ private:
     std::atomic<int> maxPolyphony{16}, bufferBurstMult{2};
     std::atomic<bool> paramSmoothing{true};
 
-    float smoothCutoff = 2800.0f, smoothRes = 0.20f, smoothMaster = 0.85f, smoothDelayTime = 0.32f;
-    float smoothOscVol[3] = {0.75f, 0.60f, 0.50f};
+    float smoothCutoff = 2500.0f, smoothRes = 0.20f, smoothMaster = 0.85f, smoothDelayTime = 0.32f;
+    float smoothOscVol[3] = {0.80f, 0.65f, 0.55f};
+    float smoothPolyGain = 1.0f;
     std::atomic<int> activeVoiceCount{0};
 
     static const int SCOPE_SIZE = 256;
@@ -601,7 +578,7 @@ public:
     AudioEngine() {
         for (int i = 0; i < MAX_VOICES; ++i) voices[i].init(48000.0f, i);
         lfo.init(48000.0f, 0.0);
-        lfo.setWaveType(3); // LFO Senoidal puro para modulação suave
+        lfo.setWaveType(3);
         masterDelay.init(48000.0f);
         scopeBuffer.fill(0.0f);
     }
@@ -636,6 +613,7 @@ public:
             smoothMaster = masterVolume.load();
             smoothDelayTime = delayTime.load();
             for (int c = 0; c < 3; ++c) smoothOscVol[c] = oscVolumes[c].load();
+            smoothPolyGain = 1.0f;
 
             stream->requestStart();
             return true;
@@ -866,11 +844,12 @@ public:
         }
         activeVoiceCount.store(currentlyActive);
 
-        // Ganho linear unitário por canal de oscilador (0.28f):
-        // Permite que os 3 osciladores somados em 100% nunca saturem o barramento Master!
-        const float channelUnityGain = 0.28f;
+        // HEADROOM POLIFÔNICO ADAPTATIVO (LEI DE POTÊNCIA CONSTANTE):
+        // Quando 1 nota toca (solo de grave), ela tem ganho total 1.0 (peso e impacto máximo).
+        // Quando múltiplas notas tocam (agudos e graves juntos), o ganho se adapta por 1 / sqrt(N),
+        // impedindo que os agudos atinjam o teto ou esmaguem a onda das notas graves!
+        float targetPolyGain = 1.0f / sqrtf(static_cast<float>(std::max(1, currentlyActive)));
 
-        // Panning sutil apenas de amplitude (Zero atraso de fase / Zero Efeito Haas!)
         const float chPanBias[3] = {0.0f, -0.15f, 0.15f};
 
         for (int i = 0; i < numFrames; ++i) {
@@ -878,6 +857,7 @@ public:
             smoothRes += smoothCoeff * (targetRes - smoothRes);
             smoothMaster += smoothCoeff * (targetMaster - smoothMaster);
             smoothDelayTime += 0.001f * (targetDTime - smoothDelayTime);
+            smoothPolyGain += 0.002f * (targetPolyGain - smoothPolyGain);
 
             for (int c = 0; c < 3; ++c) {
                 smoothOscVol[c] += smoothCoeff * (targetOscVols[c] - smoothOscVol[c]);
@@ -885,9 +865,8 @@ public:
 
             float lfoModOct = lfo.nextSample() * lfoDepthOctaves;
 
-            // 3 Barramentos de Canal Independentes (Canal 1 = OSC 1, Canal 2 = OSC 2, Canal 3 = OSC 3)
-            float chBusL[3] = {0.0f, 0.0f, 0.0f};
-            float chBusR[3] = {0.0f, 0.0f, 0.0f};
+            float mixSumL = 0.0f;
+            float mixSumR = 0.0f;
 
             for (int vIdx = 0; vIdx < polyLimit; ++vIdx) {
                 if (!voices[vIdx].isActive()) continue;
@@ -910,33 +889,29 @@ public:
 
                 float voicePanDir = ((vIdx & 1) == 0) ? -1.0f : 1.0f;
                 for (int c = 0; c < 3; ++c) {
-                    float pan = std::clamp(spread * ((0.18f * voicePanDir) + chPanBias[c]), -0.85f, 0.85f);
-                    // Lei de Pan Constant-Power trigonométrica exata (preserva energia constante L+R)
+                    float pan = std::clamp(spread * ((0.15f * voicePanDir) + chPanBias[c]), -0.75f, 0.75f);
                     float panAngle = (pan + 1.0f) * 0.25f * static_cast<float>(M_PI);
                     float gainL = cosf(panAngle);
                     float gainR = sinf(panAngle);
 
-                    chBusL[c] += voiceChOut[c] * gainL;
-                    chBusR[c] += voiceChOut[c] * gainR;
+                    mixSumL += voiceChOut[c] * gainL;
+                    mixSumR += voiceChOut[c] * gainR;
                 }
             }
 
-            // SOMA 100% PURA E LINEAR DOS 3 CANAIS NO BARRAMENTO MASTER:
-            // Cada canal de oscilador chega íntegro até a Master sem passar por compressores,
-            // sem bass-shelf artificial e sem atrasos de fase entre si!
-            float dryMasterL = (chBusL[0] + chBusL[1] + chBusL[2]) * channelUnityGain;
-            float dryMasterR = (chBusR[0] + chBusR[1] + chBusR[2]) * channelUnityGain;
+            // Soma polifônica limpa: graves e agudos convivem com folga dinâmica total
+            float voiceSumL = mixSumL * smoothPolyGain;
+            float voiceSumR = mixSumR * smoothPolyGain;
 
-            // Delay Estéreo atua como Send/Return paralelo na Master (Dry passa 100% intocado!)
             float delayedL = 0.0f, delayedR = 0.0f;
-            masterDelay.processStereo(dryMasterL, dryMasterR, smoothDelayTime, dFb, dMix, spread, delayedL, delayedR);
+            masterDelay.processStereo(voiceSumL, voiceSumR, smoothDelayTime, dFb, dMix, spread, delayedL, delayedR);
 
             float cleanL = dcBlockerL.process(delayedL) * smoothMaster;
             float cleanR = dcBlockerR.process(delayedR) * smoothMaster;
 
-            // Saída Master 100% linear até 0.95 (protege apenas contra wrap digital acima de 1.0)
-            float outL = pureMasterSafetyCeiling(cleanL);
-            float outR = pureMasterSafetyCeiling(cleanR);
+            // Limite de segurança transparente (sem achatar nem saturar)
+            float outL = std::clamp(cleanL, -0.98f, 0.98f);
+            float outR = std::clamp(cleanR, -0.98f, 0.98f);
 
             outputBuffer[i * 2] = outL;
             outputBuffer[i * 2 + 1] = outR;
