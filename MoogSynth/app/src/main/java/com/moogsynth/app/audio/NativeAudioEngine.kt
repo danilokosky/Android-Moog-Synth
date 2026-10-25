@@ -41,4 +41,17 @@ class NativeAudioEngine {
     external fun setBufferBurstMultiplier(mult: Int)
     external fun setParameterSmoothing(enabled: Boolean)
     external fun getEngineStats(outStats: FloatArray)
+
+    // ==========================================================================
+    // Controles de Simulação Física de Componentes (Transistores, RC, PSU & Motor)
+    // ==========================================================================
+    external fun setTransistorTemperatureVt(vtVolts: Float)
+    external fun setTransistorMismatch(mismatch: Float)
+    external fun setCapacitorLeakage(leakage: Float)
+    external fun setComparatorThreshold(threshold: Float)
+    external fun setEnvelopeSupplyVoltage(railVolts: Float)
+    external fun setPowerSupplySag(sag: Float)
+    external fun setTapeMotorInertia(inertia: Float)
+    external fun setTapeMotorFriction(friction: Float)
+    external fun setTapeMagneticBias(bias: Float)
 }
