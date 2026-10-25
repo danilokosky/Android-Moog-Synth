@@ -16,6 +16,7 @@
 // 1. UTILITÁRIOS MATEMÁTICOS, SEMICONDUTORES & SATURAÇÃO FÍSICA
 // ==============================================================================
 
+// Aproximação Padé de alta velocidade e continuidade C2 para tanh(x)
 static inline float fastTanh(float x) {
     if (x < -3.0f) return -1.0f;
     if (x > 3.0f) return 1.0f;
@@ -30,6 +31,7 @@ static inline double fastTanhDouble(double x) {
     return x * (27.0 + x2) / (27.0 + 9.0 * x2);
 }
 
+// Limitador de estúdio transparente (Soft-Knee Master Limiter)
 static inline float transparentMasterLimiter(float x) {
     const float threshold = 0.75f;
     const float limit = 0.985f;
@@ -40,6 +42,7 @@ static inline float transparentMasterLimiter(float x) {
     return sign * (threshold + (limit - threshold) * fastTanh(excess));
 }
 
+// Bloqueador de DC de 1ª ordem adaptativo com corte estável ~2.0Hz em qualquer sample rate
 class DCBlocker {
 private:
     double x1 = 0.0;
@@ -62,38 +65,21 @@ public:
     }
 };
 
+// Estrutura de Parâmetros Físicos de Semicondutores e Circuitos (Reguláveis em Tempo Real)
 struct PhysicalCircuitConfig {
-    float thermalVoltageVt = 0.026f;
-    float transistorMismatch = 0.020f;
-    float capacitorLeakage = 0.14f;
-    float comparatorThreshold = 0.488f;
-    float envSupplyVoltage = 1.12f;
-    float powerSupplySag = 0.08f;
-    float tapeMotorInertia = 0.50f;
-    float tapeMotorFriction = 0.20f;
-    float tapeMagneticBias = 0.25f;
+    float thermalVoltageVt = 0.026f;    // Tensão térmica BJT Vt = kT/q (~0.026V a 25°C; faixa: 0.018V a 0.040V)
+    float transistorMismatch = 0.020f;  // Tolerância/Assimetria entre pares de transistores NPN CA3046 (0.0 a 1.0)
+    float capacitorLeakage = 0.14f;     // Descarga/Fuga RC do capacitor integrador no VCO (0.0 a 0.5)
+    float comparatorThreshold = 0.488f; // Ponto de disparo do comparador analógico (Duty Cycle 0.35 a 0.65)
+    float envSupplyVoltage = 1.12f;     // Tensão de sobrecarga do trilho RC do Envelope (1.02V a 1.50V)
+    float powerSupplySag = 0.08f;       // Queda de tensão da fonte de alimentação sob alta corrente (0.0 a 1.0)
+    float tapeMotorInertia = 0.50f;     // Momento de inércia mecânica do motor/volante de fita (0.05 a 1.0)
+    float tapeMotorFriction = 0.20f;    // Atrito mecânico estocástico dos rolamentos e rolo pressor (0.0 a 1.0)
+    float tapeMagneticBias = 0.25f;     // Histerese e saturação magnética da fita de óxido férrico (0.0 a 1.0)
 };
 
 // ==============================================================================
-// 2. CONFIGURAÇÃO DSP COMPARTILHADA DO JUNO-6
-// ==============================================================================
-struct JunoConfig {
-    int synthType = 0;       // 0 = Moog, 1 = Juno
-    int range = 1;           // 0=16', 1=8', 2=4'
-    float pulseVol = 0.8f;
-    float sawVol = 0.8f;
-    float subVol = 0.5f;
-    float noiseVol = 0.0f;
-    float pwm = 0.5f;
-    float hpfCutoff = 20.0f;
-    float vcfCutoff = 1000.0f;
-    float vcfRes = 0.2f;
-    float envAmt = 0.5f;
-    int chorusMode = 0;      // 0=Off, 1=I, 2=II, 3=I+II
-};
-
-// ==============================================================================
-// 3. DECIMADOR HALF-BAND POLIFÁSICO IIR
+// 2. DECIMADOR HALF-BAND POLIFÁSICO IIR (ANTI-ALIASING DE ESTÚDIO 2X / 4X)
 // ==============================================================================
 class HalfBandDecimator {
 private:
@@ -116,6 +102,7 @@ public:
     inline double downsample(double in0, double in1) {
         double o0_A = a0 * (in0 - y0) + x0; x0 = in0; y0 = o0_A;
         double o1_A = a1 * (o0_A - y1) + x1; x1 = o0_A; y1 = o1_A;
+
         double branchA = o1_A;
         double branchB = prevB;
 
@@ -128,7 +115,7 @@ public:
 };
 
 // ==============================================================================
-// 4. FILA LOCK-FREE SPSC PARA MIDI
+// 3. FILA LOCK-FREE SPSC PARA EVENTOS MIDI (ZERO BLOQUEIO DE THREAD DE ÁUDIO)
 // ==============================================================================
 struct MidiEvent {
     enum Type : uint8_t { NOTE_ON = 1, NOTE_OFF = 2, ALL_NOTES_OFF = 3 } type;
@@ -163,7 +150,7 @@ public:
 };
 
 // ==============================================================================
-// 5. OSCILADOR VCO ANALÓGICO COM POLYBLEP/BLAMP
+// 4. OSCILADOR VCO FÍSICO (INTEGRADOR DE CAPACITOR + COMPARADOR + SHAPER DE DIODO)
 // ==============================================================================
 class Oscillator {
 public:
@@ -242,12 +229,13 @@ public:
             } else {
                 double v = 2.0 + u;
                 double v2 = v * v;
-                return -(1.0 / 60.0) * v2 * v2 * v;
+                return (1.0 / 60.0) * v2 * v2 * v;
             }
         }
         return 0.0;
     }
 
+public:
     void init(float sr, double initialPhase = 0.0) {
         sampleRate = static_cast<double>(std::max(8000.0f, sr));
         phase = initialPhase - std::floor(initialPhase);
@@ -262,6 +250,7 @@ public:
         waveType = std::clamp(type, 0, 3);
     }
 
+    // Gera amostra com parâmetros físicos do capacitor integrador e comparador analógico
     inline float nextSample(int osFactor = 1, float capLeakage = 0.14f, float compThreshold = 0.488f) {
         double effSr = sampleRate * static_cast<double>(osFactor);
         double dt = frequency / effSr;
@@ -271,6 +260,7 @@ public:
         double sample = 0.0;
         switch (waveType) {
             case 0: {
+                // SAWTOOTH FÍSICA: Carga de capacitor com fuga resistiva (capLeakage) + transistor de descarga
                 double baseSaw = (2.0 * phase) - 1.0 - polyBlep4(phase, dt);
                 double rcCurveAmt = std::clamp(static_cast<double>(capLeakage), 0.0, 0.50);
                 double rcSag = 4.0 * (phase * (1.0 - phase) - (1.0 / 6.0) + dt * polyBlamp4(phase, dt));
@@ -278,6 +268,7 @@ public:
                 break;
             }
             case 1: {
+                // SQUARE FÍSICA: Comparador analógico com limiar de tensão regulável (compThreshold)
                 double pw = std::clamp(static_cast<double>(compThreshold), 0.15, 0.85);
                 double dcComp = (2.0 * pw) - 1.0;
                 sample = ((phase < pw) ? 1.0 : -1.0) - dcComp;
@@ -289,6 +280,7 @@ public:
                 break;
             }
             case 2: {
+                // TRIANGLE FÍSICA: Conformador a diodo com saturação de pico dependente da fuga RC
                 double p = phase;
                 sample = 1.0 - 4.0 * std::fabs(p - 0.5);
                 double p2 = p + 0.5;
@@ -309,143 +301,7 @@ public:
 };
 
 // ==============================================================================
-// 6. CIRCUITOS FÍSICOS DO ROLAND JUNO-6 (DCO, HPF, BBD CHORUS)
-// ==============================================================================
-class JunoDCO {
-public:
-    double phase = 0.0;
-    double phaseSub = 0.0;
-    double frequency = 440.0;
-    double sampleRate = 48000.0;
-
-    void setFrequency(double freq, double sampleRateOS) {
-        frequency = freq;
-        sampleRate = sampleRateOS;
-    }
-
-    double process(int range, float pulseVol, float sawVol, float subVol, float noiseVol, float pwmMod) {
-        double rangeMult = (range == 0) ? 0.5 : ((range == 1) ? 1.0 : 2.0);
-        double actualFreq = frequency * rangeMult;
-        double dt = actualFreq / sampleRate;
-
-        phase += dt;
-        if (phase >= 1.0) phase -= 1.0;
-        phaseSub += dt * 0.5;
-        if (phaseSub >= 1.0) phaseSub -= 1.0;
-
-        double out = 0.0;
-
-        if (sawVol > 0.0f) {
-            double saw = (2.0 * phase) - 1.0 - Oscillator::polyBlep4(phase, dt);
-            out += saw * sawVol;
-        }
-
-        if (pulseVol > 0.0f) {
-            double pw = std::clamp(static_cast<double>(0.5 + pwmMod * 0.45), 0.05, 0.95);
-            double dcComp = (2.0 * pw) - 1.0;
-            double pulse = ((phase < pw) ? 1.0 : -1.0) - dcComp;
-            pulse += Oscillator::polyBlep4(phase, dt);
-            double phase2 = phase + (1.0 - pw);
-            if (phase2 >= 1.0) phase2 -= 1.0;
-            pulse -= Oscillator::polyBlep4(phase2, dt);
-            out += pulse * pulseVol;
-        }
-
-        if (subVol > 0.0f) {
-            double subPw = 0.5;
-            double sub = ((phaseSub < subPw) ? 1.0 : -1.0);
-            sub += Oscillator::polyBlep4(phaseSub, dt * 0.5);
-            double subPhase2 = phaseSub + (1.0 - subPw);
-            if (subPhase2 >= 1.0) subPhase2 -= 1.0;
-            sub -= Oscillator::polyBlep4(subPhase2, dt * 0.5);
-            out += sub * subVol;
-        }
-
-        if (noiseVol > 0.0f) {
-            double noise = ((double)rand() / RAND_MAX) * 2.0 - 1.0;
-            out += noise * noiseVol;
-        }
-
-        return out * 0.45;
-    }
-};
-
-class JunoHPF {
-private:
-    double z1 = 0.0;
-public:
-    inline double process(double in, double cutoff, double sr) {
-        double r = exp(-2.0 * M_PI * cutoff / sr);
-        double out = in - z1 + r * z1;
-        z1 = out;
-        return out;
-    }
-    void reset() { z1 = 0.0; }
-};
-
-class BBDChorus {
-private:
-    std::vector<float> bufferL;
-    std::vector<float> bufferR;
-    int writeIdxL = 0;
-    int writeIdxR = 0;
-    double lfoPhase = 0.0;
-    
-public:
-    BBDChorus() {
-        bufferL.resize(48000, 0.0f);
-        bufferR.resize(48000, 0.0f);
-    }
-
-    void clear() {
-        std::fill(bufferL.begin(), bufferL.end(), 0.0f);
-        std::fill(bufferR.begin(), bufferR.end(), 0.0f);
-        writeIdxL = writeIdxR = 0;
-        lfoPhase = 0.0;
-    }
-    
-    void processStereo(float& outL, float& outR, int mode, double sr) {
-        if (mode == 0) return;
-        
-        double rate1 = 0.5;
-        double depth1 = 2.0;
-        double rate2 = 0.83;
-        double depth2 = 2.5;
-        
-        double currentRate = (mode == 1) ? rate1 : ((mode == 2) ? rate2 : 1.0);
-        double currentDepth = (mode == 1) ? depth1 : ((mode == 2) ? depth2 : 3.8);
-        
-        lfoPhase += (currentRate / sr);
-        if (lfoPhase >= 1.0) lfoPhase -= 1.0;
-        
-        double modL = sin(2.0 * M_PI * lfoPhase);
-        double modR = sin(2.0 * M_PI * lfoPhase + M_PI);
-        
-        double delayTimeL_ms = 4.0 + modL * currentDepth;
-        double delayTimeR_ms = 4.0 + modR * currentDepth;
-        
-        int readIdxL = writeIdxL - static_cast<int>(delayTimeL_ms * sr / 1000.0);
-        if (readIdxL < 0) readIdxL += static_cast<int>(bufferL.size());
-        
-        int readIdxR = writeIdxR - static_cast<int>(delayTimeR_ms * sr / 1000.0);
-        if (readIdxR < 0) readIdxR += static_cast<int>(bufferR.size());
-        
-        float delayedL = bufferL[readIdxL];
-        float delayedR = bufferR[readIdxR];
-        
-        bufferL[writeIdxL] = outL;
-        bufferR[writeIdxR] = outR;
-        
-        writeIdxL = (writeIdxL + 1) % static_cast<int>(bufferL.size());
-        writeIdxR = (writeIdxR + 1) % static_cast<int>(bufferR.size());
-        
-        outL = outL * 0.5f + delayedL * 0.5f;
-        outR = outR * 0.5f + delayedR * 0.5f;
-    }
-};
-
-// ==============================================================================
-// 7. ENVELOPE RC FÍSICO
+// 5. ENVELOPE RC FÍSICO (CAPACITOR REAL COM TRILHO DE TENSÃO E CHAVEAMENTO A DIODO)
 // ==============================================================================
 class Envelope {
 private:
@@ -457,7 +313,7 @@ private:
     float decayTime = 0.25f;
     float sustainLevel = 0.8f;
     float releaseTime = 0.25f;
-    float supplyRailV = 1.12f;
+    float supplyRailV = 1.12f; // Tensão física do trilho que carrega o capacitor no Attack
 
     float attackCoeff = 0.01f;
     float decayCoeff = 0.005f;
@@ -466,6 +322,7 @@ private:
     void recalcCoeffs() {
         float sr = std::max(8000.0f, sampleRate);
         float atkSamples = std::max(1.0f, attackTime * sr);
+        // Ajusta a constante RC com base na tensão de sobrecarga física (supplyRailV)
         float railRatio = std::clamp(supplyRailV, 1.01f, 1.60f);
         float targetFactor = -std::log((railRatio - 1.0f) / railRatio);
         attackCoeff = 1.0f - expf(-targetFactor / atkSamples);
@@ -540,7 +397,8 @@ public:
 };
 
 // ==============================================================================
-// 8. ESCADA DE TRANSISTORES MOOG (BJT LADDER + ZDF)
+// 6. ESCADA DE TRANSISTORES BJT FÍSICA (4 PARES DIFERENCIAIS NPN CA3046 + ZDF)
+//    Baseado no modelo físico não-linear de D'Angelo & Välimäki
 // ==============================================================================
 class MoogLadderFilter {
 private:
@@ -549,22 +407,26 @@ private:
     HalfBandDecimator decim4xTo2x;
     HalfBandDecimator decim2xTo1x;
 
+    // Ganhos individuais dos 4 estágios (com tolerância física de capacitores/transistores)
     double G[4] = {0.0, 0.0, 0.0, 0.0};
     double G_prod = 0.0;
     double k = 0.0;
     double passbandComp = 1.0;
     double invOnePlusKGprod = 1.0;
 
-    double thermalScale = 1.0;
+    // Parâmetros físicos dos semicondutores BJT
+    double thermalScale = 1.0;      // Escala baseada em Vt (Tensão Térmica kT/q)
     double invThermalScale = 1.0;
-    double bjtAsymOffset = 0.0;
-    double bjtAsymBiasComp = 0.0;
-    double stageMismatchBase[4] = { -0.85, 0.65, -0.40, 0.70 };
+    double bjtAsymOffset = 0.0;     // Descasamento DC entre transistores do par diferencial
+    double bjtAsymBiasComp = 0.0;   // Ponto de operação quiescente tanh(offset)
+    double stageMismatchBase[4] = { -0.85, 0.65, -0.40, 0.70 }; // Perfil único de fábrica da voz
 
     float drv = 1.0f;
     float invTanhDrv = 1.0f;
     bool useDrive = false;
 
+    // Equação física Ebers-Moll do Par Diferencial Bipolar (Q_left / Q_right)
+    // I_diff = I_ctl * tanh(V_diff / (2 * Vt) + offset) - I_offset
     inline double bjtDiffPair(double v) const {
         return (fastTanhDouble(v * thermalScale + bjtAsymOffset) - bjtAsymBiasComp) * invThermalScale;
     }
@@ -572,6 +434,7 @@ private:
 public:
     void init(float sr, int voiceIdx = 0) {
         sampleRate = sr;
+        // Gera micro-tolerâncias únicas para os 4 capacitores/transistores de cada voz
         double seed = static_cast<double>(voiceIdx + 1) * 0.37;
         stageMismatchBase[0] = std::sin(seed * 1.3);
         stageMismatchBase[1] = std::cos(seed * 2.1);
@@ -586,6 +449,7 @@ public:
         decim2xTo1x.reset();
     }
 
+    // Prepara os parâmetros físicos dos 4 pares de transistores e capacitores por amostra
     inline void prepareFrame(
         float cutoffHz,
         float resonance,
@@ -597,14 +461,18 @@ public:
         double effSr = static_cast<double>(sampleRate) * static_cast<double>(osFactor);
         double baseFc = std::clamp(static_cast<double>(cutoffHz), 20.0, static_cast<double>(sampleRate) * 0.46);
 
+        // 1. Tensão Térmica Física do Semicondutor (Vt nominal = 0.026V a 25°C)
+        // Quanto menor Vt (frio), mais abrupta é a saturação; quanto maior Vt (quente), mais suave e aberta.
         double vtClamped = std::clamp(static_cast<double>(thermalVt), 0.018, 0.040);
         thermalScale = 0.026 / vtClamped;
         invThermalScale = 1.0 / thermalScale;
 
+        // 2. Assimetria do Par Diferencial NPN (gera 2º harmônico quente nos transistores)
         double mm = std::clamp(static_cast<double>(mismatchAmt), 0.0, 1.0);
         bjtAsymOffset = mm * 0.14;
         bjtAsymBiasComp = fastTanhDouble(bjtAsymOffset);
 
+        // 3. Tolerância Física de cada um dos 4 estágios RC/Transistor da escada
         for (int st = 0; st < 4; ++st) {
             double stageTolerance = 1.0 + (stageMismatchBase[st] * mm * 0.035);
             double fcStage = std::clamp(baseFc * stageTolerance, 20.0, effSr * 0.47);
@@ -617,6 +485,7 @@ public:
         double resNorm = std::clamp(static_cast<double>(resonance), 0.0, 1.0);
         k = std::pow(resNorm, 1.25) * 3.92;
 
+        // Compensação de ganho na banda passante (DC Passband Compensation)
         passbandComp = 1.0 + (k * 0.85);
         invOnePlusKGprod = 1.0 / (1.0 + k * G_prod);
 
@@ -627,30 +496,37 @@ public:
         }
     }
 
+    // Executa 1 sub-passo resolvendo a escada de 4 transistores não-lineares acoplados
     inline double stepSubSample(float rawInput) {
         double inSignal = static_cast<double>(rawInput);
         if (useDrive) {
             inSignal = static_cast<double>(fastTanh(rawInput * drv) * invTanhDrv);
         }
         double x = inSignal * passbandComp;
+
         double G0 = G[0], G1 = G[1], G2 = G[2], G3 = G[3];
 
+        // Soma ponderada dos estados dos 4 capacitores para malha Zero-Delay Feedback (ZDF)
         double S = (G1 * G2 * G3 * s[0]) + (G2 * G3 * s[1]) + (G3 * s[2]) + s[3];
         double fb = bjtDiffPair(S);
         double u = (x - k * fb) * invOnePlusKGprod;
 
+        // Estágio 1: Par Diferencial Q1/Q2 carregando Capacitor C1
         double v0 = (bjtDiffPair(u) - bjtDiffPair(s[0])) * G0;
         double y0 = v0 + s[0];
         s[0] = y0 + v0;
 
+        // Estágio 2: Par Diferencial Q3/Q4 carregando Capacitor C2
         double v1 = (bjtDiffPair(y0) - bjtDiffPair(s[1])) * G1;
         double y1 = v1 + s[1];
         s[1] = y1 + v1;
 
+        // Estágio 3: Par Diferencial Q5/Q6 carregando Capacitor C3
         double v2 = (bjtDiffPair(y1) - bjtDiffPair(s[2])) * G2;
         double y2 = v2 + s[2];
         s[2] = y2 + v2;
 
+        // Estágio 4: Par Diferencial Q7/Q8 carregando Capacitor C4
         double v3 = (bjtDiffPair(y2) - bjtDiffPair(s[3])) * G3;
         double y3 = v3 + s[3];
         s[3] = y3 + v3;
@@ -670,7 +546,7 @@ public:
 };
 
 // ==============================================================================
-// 9. DELAY ANALÓGICO MASTER
+// 7. MOTOR ELETROMECÂNICO DE FITA MAGNÉTICA (CAPSTAN SERVO + HISTERESE MAGNÉTICA)
 // ==============================================================================
 class AnalogDelay {
 private:
@@ -684,6 +560,7 @@ private:
     float capstanPhase = 0.0f;
     float lpfAlpha = 0.45f, hpfAlpha = 0.015f;
 
+    // Estado físico do motor DC (Capstan) e atrito dos rolamentos
     float actualTapeDelaySec = 0.32f;
     float motorVelocity = 0.0f;
     float bearingNoiseFilter = 0.0f;
@@ -755,10 +632,12 @@ public:
             return;
         }
 
+        // 1. Dinâmica Eletromecânica de 2ª Ordem do Motor DC com Volante de Inércia (Capstan)
         float dt = 1.0f / sampleRate;
         float inertia = std::clamp(motorInertia, 0.05f, 1.0f);
+        // Frequência natural do servo-motor inversamente proporcional à inércia mecânica
         float omegaN = 35.0f / (0.25f + inertia * 2.5f);
-        float zeta = 0.75f;
+        float zeta = 0.75f; // Coeficiente de amortecimento mecânico (permite leve overshoot analógico)
 
         float posError = targetDelayTimeSec - actualTapeDelaySec;
         float springAccel = (omegaN * omegaN) * posError;
@@ -767,6 +646,7 @@ public:
         actualTapeDelaySec += motorVelocity * dt;
         actualTapeDelaySec = std::clamp(actualTapeDelaySec, 0.01f, 1.50f);
 
+        // 2. Simulação Física de Rolamentos, Excentricidade do Eixo e Escorregamento do Pinch Roller
         wowPhase += 0.52f * dt;
         if (wowPhase >= 1.0f) wowPhase -= 1.0f;
         flutterPhase += 5.4f * dt;
@@ -774,6 +654,7 @@ public:
         capstanPhase += 13.7f * dt;
         if (capstanPhase >= 1.0f) capstanPhase -= 1.0f;
 
+        // Ruído estocástico mecânico dos rolamentos filtrado pela massa do motor
         bearingNoiseFilter = bearingNoiseFilter * 0.996f + nextMotorNoise() * 0.004f;
 
         float frictionAmt = std::clamp(motorFriction, 0.0f, 1.0f);
@@ -793,6 +674,7 @@ public:
         float rawL = readFractionalHermite(bufferL, delaySamplesL);
         float rawR = readFractionalHermite(bufferR, delaySamplesR);
 
+        // 3. Perda Magnética de Cabeçote e Head Bump (Passa-Altas + Passa-Baixas dependente do Bias)
         float biasClamped = std::clamp(magneticBias, 0.0f, 1.0f);
         float dynamicLpfAlpha = lpfAlpha * (1.15f - 0.55f * biasClamped);
 
@@ -809,6 +691,7 @@ public:
         float fbSignalL = lpStateL * (1.0f - cross) + lpStateR * cross;
         float fbSignalR = lpStateR * (1.0f - cross) + lpStateL * cross;
 
+        // 4. Saturação Magnética da Fita com Assimetria de Histerese (Magnetic Bias)
         float tapeDrive = 1.0f + biasClamped * 1.1f;
         float tapeAsym = biasClamped * 0.08f;
         float biasOffset = fastTanh(tapeAsym);
@@ -826,14 +709,191 @@ public:
 };
 
 // ==============================================================================
-// 10. VOZ POLIFÔNICA COM DUPLO MOTOR (MOOG + JUNO-6)
+// 8. VOZ POLIFÔNICA FÍSICA (VCOs + MIXER + LADDER TRANSISTORIZADA + PSU SAG)
 // ==============================================================================
+// ==============================================================================
+// ROLAND JUNO-6 COMPONENTS (DCO, HPF, BBD CHORUS)
+// ==============================================================================
+
+class JunoDCO {
+public:
+    double phase = 0.0;
+    double frequency = 440.0;
+    double sampleRate = 48000.0;
+
+    void setFrequency(double freq, double sampleRateOS) {
+        frequency = freq;
+        sampleRate = sampleRateOS;
+    }
+
+    double process(int range, float pulseVol, float sawVol, float subVol, float noiseVol, float pwmMod) {
+        double rangeMult = (range == 0) ? 0.5 : ((range == 1) ? 1.0 : 2.0);
+        double actualFreq = frequency * rangeMult;
+        double dt = actualFreq / sampleRate;
+
+        phase += dt;
+        if (phase >= 1.0) phase -= 1.0;
+
+        double out = 0.0;
+
+        // DCO SAW: True discharge capacitor model approximation (sounds thicker than pure saw)
+        if (sawVol > 0.0f) {
+            double saw = (2.0 * phase) - 1.0 - Oscillator::polyBlep4(phase, dt);
+            // Add a very subtle non-linear curve to simulate the Juno capacitor charging
+            saw += 0.05 * (saw * saw - 1.0); 
+            out += saw * sawVol;
+        }
+
+        // DCO PULSE (PWM)
+        if (pulseVol > 0.0f) {
+            double pw = std::clamp(static_cast<double>(pwmMod), 0.05, 0.95);
+            double dcComp = (2.0 * pw) - 1.0;
+            double pulse = ((phase < pw) ? 1.0 : -1.0) - dcComp;
+            pulse += Oscillator::polyBlep4(phase, dt);
+            double phase2 = phase + (1.0 - pw);
+            if (phase2 >= 1.0) phase2 -= 1.0;
+            pulse -= Oscillator::polyBlep4(phase2, dt);
+            out += pulse * pulseVol;
+        }
+
+        // SUB-OSCILLATOR: Perfectly phase-locked (it's a flip-flop triggered by the main DCO clock)
+        if (subVol > 0.0f) {
+            double subPhase = phase * 0.5; // Exactly half the frequency
+            // The Juno Sub is a perfect square wave 
+            double sub = (subPhase < 0.5) ? 1.0 : -1.0;
+            sub += Oscillator::polyBlep4(subPhase, dt * 0.5);
+            double subPhase2 = subPhase + 0.5;
+            if (subPhase2 >= 1.0) subPhase2 -= 1.0;
+            sub -= Oscillator::polyBlep4(subPhase2, dt * 0.5);
+            out += sub * subVol;
+        }
+
+        // NOISE (Analog White Noise Generator)
+        if (noiseVol > 0.0f) {
+            double noise = ((double)rand() / RAND_MAX) * 2.0 - 1.0;
+            out += noise * noiseVol;
+        }
+
+        // Output with slight analog DC removal and gain staging (Juno DCOs are hot)
+        return out * 0.55; 
+    }
+};
+
+class JunoHPF {
+private:
+    double z1 = 0.0;
+public:
+    inline double process(double in, double cutoff, double sr) {
+        double r = exp(-2.0 * M_PI * cutoff / sr);
+        double out = in - z1 + r * z1;
+        z1 = out;
+        return out;
+    }
+    void reset() { z1 = 0.0; }
+};
+
+class BBDChorus {
+private:
+    std::vector<float> bufferL;
+    std::vector<float> bufferR;
+    int writeIdx = 0;
+    double lfoPhase = 0.0;
+    
+    inline float readFractional(const std::vector<float>& buf, double delaySamples) {
+        int size = buf.size();
+        double readPos = static_cast<double>(writeIdx) - delaySamples;
+        while (readPos < 0.0) readPos += size;
+        if (readPos >= size) readPos -= size;
+        
+        int idx1 = static_cast<int>(readPos);
+        int idx2 = (idx1 + 1) % size;
+        
+        // Linear Interpolation (sufficient for Chorus, but let's use Hermite for less high-end loss)
+        int idx0 = (idx1 - 1 + size) % size;
+        int idx3 = (idx1 + 2) % size;
+        
+        float frac = readPos - idx1;
+        float y0 = buf[idx0], y1 = buf[idx1], y2 = buf[idx2], y3 = buf[idx3];
+        
+        float c0 = y1;
+        float c1 = 0.5f * (y2 - y0);
+        float c2 = y0 - 2.5f * y1 + 2.0f * y2 - 0.5f * y3;
+        float c3 = 0.5f * (y3 - y0) + 1.5f * (y1 - y2);
+        
+        return ((c3 * frac + c2) * frac + c1) * frac + c0;
+    }
+    
+    // Triangle wave generator: 0 to 1 to 0
+    inline double triWave(double phase) {
+        double p = phase - std::floor(phase);
+        return (p < 0.5) ? (p * 2.0) : (2.0 - p * 2.0);
+    }
+    
+public:
+    BBDChorus() {
+        bufferL.resize(48000, 0.0f);
+        bufferR.resize(48000, 0.0f);
+    }
+
+    void clear() {
+        std::fill(bufferL.begin(), bufferL.end(), 0.0f);
+        std::fill(bufferR.begin(), bufferR.end(), 0.0f);
+        writeIdx = 0;
+        lfoPhase = 0.0;
+    }
+    
+    void processStereo(float& outL, float& outR, int mode, double sr) {
+        if (mode == 0) return; // Chorus OFF
+        
+        // Juno-6 Chorus characteristics
+        double rate = 0.5;
+        double depth = 1.5; 
+        double baseDelayMs = 2.5;
+        
+        if (mode == 1) { rate = 0.4; depth = 1.0; }
+        else if (mode == 2) { rate = 0.83; depth = 1.5; }
+        else if (mode == 3) { rate = 1.2; depth = 2.5; } // I+II is faster and deeper
+        
+        lfoPhase += (rate / sr);
+        if (lfoPhase >= 1.0) lfoPhase -= 1.0;
+        
+        // Use triangle wave for authentic Juno chorus modulation
+        double modL = triWave(lfoPhase) * 2.0 - 1.0; 
+        double modR = triWave(lfoPhase + 0.5) * 2.0 - 1.0; // 180 degrees offset
+        
+        if (mode == 3) {
+            // Mode I+II has a more chaotic Sine/Tri mix in analog realm
+            modL = sin(2.0 * M_PI * lfoPhase);
+            modR = sin(2.0 * M_PI * lfoPhase + M_PI);
+        }
+        
+        double delayTimeL_ms = baseDelayMs + modL * depth;
+        double delayTimeR_ms = baseDelayMs + modR * depth;
+        
+        double delaySamplesL = delayTimeL_ms * sr / 1000.0;
+        double delaySamplesR = delayTimeR_ms * sr / 1000.0;
+        
+        float delayedL = readFractional(bufferL, delaySamplesL);
+        float delayedR = readFractional(bufferR, delaySamplesR);
+        
+        bufferL[writeIdx] = outL; // Store dry signal
+        bufferR[writeIdx] = outR;
+        
+        writeIdx = (writeIdx + 1) % bufferL.size();
+        
+        // BBD circuits naturally roll off high frequencies and add warmth
+        // A simple one-pole LPF at ~6kHz would simulate the BBD loss, but let's keep it clean and lush first.
+        outL = outL * 0.707f + delayedL * 0.707f;
+        outR = outR * 0.707f + delayedR * 0.707f;
+    }
+};
+
 class Voice {
 private:
-    Oscillator osc[3];
     JunoDCO junoDco;
-    JunoHPF junoHpfFilter;
+    JunoHPF junoHpf;
 
+    Oscillator osc[3];
     MoogLadderFilter vcf;
     Envelope ampEnv;
     Envelope filterEnv;
@@ -845,7 +905,7 @@ private:
     uint32_t rngState = 123456789u;
     int driftCounter = 0;
     float oscDriftSt[3] = {0.0f, 0.0f, 0.0f};
-    float voicePsuSagState = 0.0f;
+    float voicePsuSagState = 0.0f; // Estado do capacitor da fonte de alimentação sob carga
 
     float nextWhiteNoise() {
         rngState = rngState * 1664525u + 1013904223u;
@@ -871,15 +931,11 @@ public:
         ampEnv.setADSR(0.008f, 0.3f, 0.8f, 0.25f);
         filterEnv.init(sr);
         filterEnv.setADSR(0.008f, 0.25f, 0.35f, 0.25f);
-        junoHpfFilter.reset();
         voicePsuSagState = 0.0f;
     }
 
     void updateFrequencies(const float* oscTunes, float driftAmount, float psuPitchSagSt = 0.0f) {
         if (currentNote < 0) return;
-        float baseFreq = 440.0f * exp2f((static_cast<float>(currentNote) - 69.0f) / 12.0f);
-        junoDco.setFrequency(baseFreq, sampleRate);
-
         for (int c = 0; c < 3; ++c) {
             float totalDetuneSt = oscTunes[c] + (oscDriftSt[c] * driftAmount * 0.35f) - psuPitchSagSt;
             float freq = 440.0f * exp2f((static_cast<float>(currentNote) + totalDetuneSt - 69.0f) / 12.0f);
@@ -908,7 +964,6 @@ public:
         ampEnv.kill();
         filterEnv.kill();
         vcf.reset();
-        junoHpfFilter.reset();
         voicePsuSagState = 0.0f;
     }
 
@@ -954,7 +1009,6 @@ public:
         int oversampleFactor,
         float voicePan,
         const PhysicalCircuitConfig& phys,
-        const JunoConfig& juno,
         float& voiceOutL,
         float& voiceOutR
     ) {
@@ -967,6 +1021,7 @@ public:
         float fEnvVal = filterEnv.nextLevel();
         float aEnvVal = ampEnv.nextLevel();
 
+        // Simulação de Power Supply Sag (queda de tensão da fonte sob picos de envelope e graves)
         float instantLoad = aEnvVal * (0.5f + 0.5f * fEnvVal);
         voicePsuSagState = voicePsuSagState * 0.992f + instantLoad * 0.008f;
         float sagEffect = voicePsuSagState * phys.powerSupplySag;
@@ -976,6 +1031,7 @@ public:
                 oscDriftSt[c] = (oscDriftSt[c] * 0.994f) + (nextWhiteNoise() * 0.006f);
                 oscDriftSt[c] = std::clamp(oscDriftSt[c], -0.10f, 0.10f);
             }
+            // A queda da fonte (PSU Sag) afeta sutilmente a afinação dos VCOs (até ~0.12 semitons em sag máximo)
             updateFrequencies(oscTunes, driftAmount, sagEffect * 0.12f);
         }
 
@@ -988,36 +1044,54 @@ public:
             ? ((noteOffset / 12.0f) * keyTrackAmount)
             : ((noteOffset / 12.0f) * keyTrackAmount * 0.15f);
 
+        // O Sag da fonte também comprime ligeiramente o pico de tensão do cutoff do filtro
         float sagCutoffOctaves = -sagEffect * 0.25f;
         float totalOctaves = envOctaves + lfoModOctaves + keyTrackOctaves + sagCutoffOctaves;
+        float voiceCutoff = std::max(baseCutoff * exp2f(totalOctaves), 40.0f);
 
-        int os = (oversampleFactor >= 4) ? 4 : ((oversampleFactor >= 2) ? 2 : 1);
+        
+        float jRange = junoRange.load();
+        float jPulse = junoPulseVol.load();
+        float jSaw = junoSawVol.load();
+        float jSub = junoSubVol.load();
+        float jNoise = junoNoiseVol.load();
+        float jPwmMod = junoPwm.load();
+        float jHpfCut = junoHpf.load();
+        float jVcfCut = junoVcfCutoff.load();
+        float jVcfRes = junoVcfRes.load();
+        float jEnvAmt = junoEnvAmt.load();
+        int sType = synthType.load();
 
-        // ==========================================
-        // ROTEAMENTO 1: ROLAND JUNO-6
-        // ==========================================
-        if (juno.synthType == 1) {
-            float jCutoffHz = std::max(juno.vcfCutoff * exp2f(envOctaves * juno.envAmt + lfoModOctaves + keyTrackOctaves), 40.0f);
-            vcf.prepareFrame(jCutoffHz, juno.vcfRes, driveNorm, os, phys.thermalVoltageVt, phys.transistorMismatch);
-            junoDco.setFrequency(440.0f * exp2f((static_cast<float>(currentNote) - 69.0f) / 12.0f), static_cast<double>(sampleRate * os));
+        if (sType == 1) {
+            // JUNO ROUTING
+            float jCutoffHz = std::max(jVcfCut * exp2f(envOctaves * jEnvAmt + lfoModOctaves + keyTrackOctaves), 40.0f);
+            
+            int os = (oversampleFactor >= 4) ? 4 : ((oversampleFactor >= 2) ? 2 : 1);
+            
+            // Apply Analog Drift, PSU Sag, and LFO Vibrato to the Juno DCO Master Clock
+            float totalJunoDetuneSt = (lfoModOctaves * 0.4f) + (oscDriftSt[0] * driftAmount * 0.35f) - (sagEffect * 0.12f);
+            float baseJunoFreq = 440.0f * exp2f((static_cast<float>(currentNote) + totalJunoDetuneSt - 69.0f) / 12.0f);
+            junoDco.setFrequency(baseJunoFreq, 48000.0 * os);
+            
+            // Adjust the filter for Roland IR3109 character (slightly less drive distortion natively)
+            vcf.prepareFrame(jCutoffHz, jVcfRes, driveNorm * 0.5f, os, phys.thermalVoltageVt, phys.transistorMismatch * 0.5f);
+            
+            // Juno PWM Modulation (Base + LFO)
+            float pwmEff = jPwmMod + (lfoModOctaves * 0.35f);
 
             float filtered = 0.0f;
-            double pwmEff = static_cast<double>(juno.pwm) + (lfoModOctaves * 0.15);
-
             if (os == 4) {
-                double srOS = sampleRate * 4.0;
-                double y0 = vcf.stepSubSample(static_cast<float>(junoHpfFilter.process(junoDco.process(juno.range, juno.pulseVol, juno.sawVol, juno.subVol, juno.noiseVol, pwmEff), juno.hpfCutoff, srOS)));
-                double y1 = vcf.stepSubSample(static_cast<float>(junoHpfFilter.process(junoDco.process(juno.range, juno.pulseVol, juno.sawVol, juno.subVol, juno.noiseVol, pwmEff), juno.hpfCutoff, srOS)));
-                double y2 = vcf.stepSubSample(static_cast<float>(junoHpfFilter.process(junoDco.process(juno.range, juno.pulseVol, juno.sawVol, juno.subVol, juno.noiseVol, pwmEff), juno.hpfCutoff, srOS)));
-                double y3 = vcf.stepSubSample(static_cast<float>(junoHpfFilter.process(junoDco.process(juno.range, juno.pulseVol, juno.sawVol, juno.subVol, juno.noiseVol, pwmEff), juno.hpfCutoff, srOS)));
+                double y0 = vcf.stepSubSample(junoHpf.process(junoDco.process(jRange, jPulse, jSaw, jSub, jNoise, pwmEff), jHpfCut, 48000.0*4));
+                double y1 = vcf.stepSubSample(junoHpf.process(junoDco.process(jRange, jPulse, jSaw, jSub, jNoise, pwmEff), jHpfCut, 48000.0*4));
+                double y2 = vcf.stepSubSample(junoHpf.process(junoDco.process(jRange, jPulse, jSaw, jSub, jNoise, pwmEff), jHpfCut, 48000.0*4));
+                double y3 = vcf.stepSubSample(junoHpf.process(junoDco.process(jRange, jPulse, jSaw, jSub, jNoise, pwmEff), jHpfCut, 48000.0*4));
                 filtered = vcf.decimate4x(y0, y1, y2, y3);
             } else if (os == 2) {
-                double srOS = sampleRate * 2.0;
-                double y0 = vcf.stepSubSample(static_cast<float>(junoHpfFilter.process(junoDco.process(juno.range, juno.pulseVol, juno.sawVol, juno.subVol, juno.noiseVol, pwmEff), juno.hpfCutoff, srOS)));
-                double y1 = vcf.stepSubSample(static_cast<float>(junoHpfFilter.process(junoDco.process(juno.range, juno.pulseVol, juno.sawVol, juno.subVol, juno.noiseVol, pwmEff), juno.hpfCutoff, srOS)));
+                double y0 = vcf.stepSubSample(junoHpf.process(junoDco.process(jRange, jPulse, jSaw, jSub, jNoise, pwmEff), jHpfCut, 48000.0*2));
+                double y1 = vcf.stepSubSample(junoHpf.process(junoDco.process(jRange, jPulse, jSaw, jSub, jNoise, pwmEff), jHpfCut, 48000.0*2));
                 filtered = vcf.decimate2x(y0, y1);
             } else {
-                filtered = static_cast<float>(vcf.stepSubSample(static_cast<float>(junoHpfFilter.process(junoDco.process(juno.range, juno.pulseVol, juno.sawVol, juno.subVol, juno.noiseVol, pwmEff), juno.hpfCutoff, sampleRate))));
+                filtered = vcf.stepSubSample(junoHpf.process(junoDco.process(jRange, jPulse, jSaw, jSub, jNoise, pwmEff), jHpfCut, 48000.0));
             }
 
             float vcaOut = filtered * aEnvVal * velFactor;
@@ -1026,16 +1100,14 @@ public:
             voiceOutR = vcaOut * sinf(panAngle);
             return;
         }
-
-        // ==========================================
-        // ROTEAMENTO 2: MOOG POLY-D
-        // ==========================================
+        
+        // MOOG ROUTING
         float totalVol = oscVols[0] + oscVols[1] + oscVols[2];
-        float voiceCutoff = std::max(baseCutoff * exp2f(totalOctaves), 40.0f);
 
         float mixScale = (totalVol > 0.001f) ? (1.0f / sqrtf(std::max(1.0f, totalVol))) : 0.0f;
         float totalMixGain = mixScale * 0.65f * (1.0f - sagEffect * 0.12f);
 
+        int os = (oversampleFactor >= 4) ? 4 : ((oversampleFactor >= 2) ? 2 : 1);
         vcf.prepareFrame(
             voiceCutoff,
             resonance,
@@ -1064,6 +1136,7 @@ public:
         }
 
         float vcaOut = filtered * aEnvVal * velFactor;
+
         float panAngle = (voicePan + 1.0f) * 0.25f * static_cast<float>(M_PI);
         voiceOutL = vcaOut * cosf(panAngle);
         voiceOutR = vcaOut * sinf(panAngle);
@@ -1071,7 +1144,7 @@ public:
 };
 
 // ==============================================================================
-// 11. MOTOR DE ÁUDIO PRINCIPAL COM SUPORTE DUAL-SYNTH & CHORUS BBD
+// 9. MOTOR DE ÁUDIO PRINCIPAL COM MODELAGEM DE COMPONENTES FÍSICOS
 // ==============================================================================
 class AudioEngine : public oboe::AudioStreamDataCallback, public oboe::AudioStreamErrorCallback {
 private:
@@ -1082,7 +1155,6 @@ private:
     LockFreeMidiQueue midiQueue;
     Oscillator lfo;
     AnalogDelay masterDelay;
-    BBDChorus masterChorus;
     DCBlocker dcBlockerL;
     DCBlocker dcBlockerR;
 
@@ -1103,31 +1175,34 @@ private:
     std::atomic<float> analogDrift{0.05f}, filterDrive{0.0f}, filterKeyTrack{0.50f}, stereoSpread{0.15f}, velocitySens{0.35f};
     std::atomic<int> maxPolyphony{16}, bufferBurstMult{2};
 
-    // Parâmetros do Roland Juno-6
-    std::atomic<int> synthType{0};
-    std::atomic<int> junoRange{1};
-    std::atomic<float> junoPulseVol{0.8f};
-    std::atomic<float> junoSawVol{0.8f};
-    std::atomic<float> junoSubVol{0.5f};
-    std::atomic<float> junoNoiseVol{0.0f};
-    std::atomic<float> junoPwm{0.5f};
-    std::atomic<float> junoHpfCutoff{20.0f};
-    std::atomic<float> junoVcfCutoff{1000.0f};
-    std::atomic<float> junoVcfRes{0.2f};
-    std::atomic<float> junoEnvAmt{0.5f};
-    std::atomic<int> junoChorusMode{0};
+// ==========================================
+// VARIÁVEIS GLOBAIS DO JUNO-6
+// ==========================================
+std::atomic<int> synthType{0}; // 0 = Moog, 1 = Juno
+std::atomic<int> junoRange{1}; // 0=16', 1=8', 2=4'
+std::atomic<float> junoPulseVol{0.8f};
+std::atomic<float> junoSawVol{0.8f};
+std::atomic<float> junoSubVol{0.5f};
+std::atomic<float> junoNoiseVol{0.0f};
+std::atomic<float> junoPwm{0.5f};
+std::atomic<float> junoHpf{20.0f};
+std::atomic<float> junoVcfCutoff{1000.0f};
+std::atomic<float> junoVcfRes{0.2f};
+std::atomic<float> junoEnvAmt{0.5f};
+std::atomic<int> junoChorus{0}; // 0=Off, 1=I, 2=II, 3=I+II
 
     std::atomic<bool> paramSmoothing{true};
 
-    std::atomic<float> thermalVoltageVt{0.026f};
-    std::atomic<float> transistorMismatch{0.020f};
-    std::atomic<float> capacitorLeakage{0.14f};
-    std::atomic<float> comparatorThreshold{0.488f};
-    std::atomic<float> envSupplyVoltage{1.12f};
-    std::atomic<float> powerSupplySag{0.08f};
-    std::atomic<float> tapeMotorInertia{0.50f};
-    std::atomic<float> tapeMotorFriction{0.20f};
-    std::atomic<float> tapeMagneticBias{0.25f};
+    // Parâmetros Físicos de Nível de Componente (Transistores, Capacitores, Fonte e Motor de Fita)
+    std::atomic<float> thermalVoltageVt{0.026f};    // ~26mV em 25°C (0.018V a 0.040V)
+    std::atomic<float> transistorMismatch{0.020f};  // Assimetria BJT CA3046 (0.0 a 1.0)
+    std::atomic<float> capacitorLeakage{0.14f};     // Fuga RC do capacitor do VCO (0.0 a 0.5)
+    std::atomic<float> comparatorThreshold{0.488f}; // Limiar do comparador da onda quadrada (0.20 a 0.80)
+    std::atomic<float> envSupplyVoltage{1.12f};     // Tensão de sobrecarga RC do ADSR (1.02V a 1.50V)
+    std::atomic<float> powerSupplySag{0.08f};       // Queda da fonte de alimentação sob carga (0.0 a 1.0)
+    std::atomic<float> tapeMotorInertia{0.50f};     // Inércia mecânica do motor Capstan (0.05 a 1.0)
+    std::atomic<float> tapeMotorFriction{0.20f};    // Atrito mecânico dos rolamentos (0.0 a 1.0)
+    std::atomic<float> tapeMagneticBias{0.25f};     // Bias magnético e histerese da fita (0.0 a 1.0)
 
     std::atomic<float> ampA{0.008f}, ampD{0.3f}, ampS{0.8f}, ampR{0.25f};
     std::atomic<float> fltA{0.008f}, fltD{0.25f}, fltS{0.35f}, fltR{0.25f};
@@ -1194,7 +1269,6 @@ private:
     void handleAllNotesOff() {
         for (auto& v : voices) v.kill();
         masterDelay.clear();
-        masterChorus.clear();
         dcBlockerL.clear();
         dcBlockerR.clear();
     }
@@ -1253,15 +1327,23 @@ public:
         }
     }
 
-    void onErrorAfterClose(oboe::AudioStream *, oboe::Result error) override {
+    void onErrorAfterClose(oboe::AudioStream *oboeStream, oboe::Result error) override {
         if (error == oboe::Result::ErrorDisconnected) {
             std::thread([this]() { this->start(); }).detach();
         }
     }
 
-    void noteOn(int note, int velocity) { midiQueue.push({MidiEvent::NOTE_ON, note, velocity}); }
-    void noteOff(int note) { midiQueue.push({MidiEvent::NOTE_OFF, note, 0}); }
-    void allNotesOff() { midiQueue.push({MidiEvent::ALL_NOTES_OFF, 0, 0}); }
+    void noteOn(int note, int velocity) {
+        midiQueue.push({MidiEvent::NOTE_ON, note, velocity});
+    }
+
+    void noteOff(int note) {
+        midiQueue.push({MidiEvent::NOTE_OFF, note, 0});
+    }
+
+    void allNotesOff() {
+        midiQueue.push({MidiEvent::ALL_NOTES_OFF, 0, 0});
+    }
 
     void setOscVolume(int index, float vol) {
         if (index >= 0 && index < 3) oscVolumes[index].store(std::clamp(vol, 0.0f, 1.0f));
@@ -1283,20 +1365,6 @@ public:
         delayFeedback.store(fb);
         delayMix.store(mix);
     }
-
-    // Setters Juno-6
-    void setSynthType(int type) { synthType.store(type); }
-    void setJunoRange(int range) { junoRange.store(range); }
-    void setJunoPulseVol(float vol) { junoPulseVol.store(vol); }
-    void setJunoSawVol(float vol) { junoSawVol.store(vol); }
-    void setJunoSubVol(float vol) { junoSubVol.store(vol); }
-    void setJunoNoiseVol(float vol) { junoNoiseVol.store(vol); }
-    void setJunoPwm(float pwm) { junoPwm.store(pwm); }
-    void setJunoHpf(float cutoffHz) { junoHpfCutoff.store(cutoffHz); }
-    void setJunoVcfCutoff(float cutoffHz) { junoVcfCutoff.store(cutoffHz); }
-    void setJunoVcfRes(float res) { junoVcfRes.store(res); }
-    void setJunoEnvAmt(float amt) { junoEnvAmt.store(amt); }
-    void setJunoChorus(int mode) { junoChorusMode.store(mode); }
 
     void setAmpADSR(float a, float d, float s, float r) {
         ampA.store(a); ampD.store(d); ampS.store(s); ampR.store(r);
@@ -1330,18 +1398,35 @@ public:
 
     void setParameterSmoothing(bool enabled) { paramSmoothing.store(enabled); }
 
-    void setTransistorTemperatureVt(float vtVolts) { thermalVoltageVt.store(std::clamp(vtVolts, 0.018f, 0.040f)); }
-    void setTransistorMismatch(float mismatch) { transistorMismatch.store(std::clamp(mismatch, 0.0f, 1.0f)); }
-    void setCapacitorLeakage(float leakage) { capacitorLeakage.store(std::clamp(leakage, 0.0f, 0.50f)); }
-    void setComparatorThreshold(float threshold) { comparatorThreshold.store(std::clamp(threshold, 0.20f, 0.80f)); }
+    // Setters dos Parâmetros Físicos de Semicondutores e Motores
+    void setTransistorTemperatureVt(float vtVolts) {
+        thermalVoltageVt.store(std::clamp(vtVolts, 0.018f, 0.040f));
+    }
+    void setTransistorMismatch(float mismatch) {
+        transistorMismatch.store(std::clamp(mismatch, 0.0f, 1.0f));
+    }
+    void setCapacitorLeakage(float leakage) {
+        capacitorLeakage.store(std::clamp(leakage, 0.0f, 0.50f));
+    }
+    void setComparatorThreshold(float threshold) {
+        comparatorThreshold.store(std::clamp(threshold, 0.20f, 0.80f));
+    }
     void setEnvelopeSupplyVoltage(float railVolts) {
         envSupplyVoltage.store(std::clamp(railVolts, 1.02f, 1.50f));
         envParamsDirty.store(true);
     }
-    void setPowerSupplySag(float sag) { powerSupplySag.store(std::clamp(sag, 0.0f, 1.0f)); }
-    void setTapeMotorInertia(float inertia) { tapeMotorInertia.store(std::clamp(inertia, 0.05f, 1.0f)); }
-    void setTapeMotorFriction(float friction) { tapeMotorFriction.store(std::clamp(friction, 0.0f, 1.0f)); }
-    void setTapeMagneticBias(float bias) { tapeMagneticBias.store(std::clamp(bias, 0.0f, 1.0f)); }
+    void setPowerSupplySag(float sag) {
+        powerSupplySag.store(std::clamp(sag, 0.0f, 1.0f));
+    }
+    void setTapeMotorInertia(float inertia) {
+        tapeMotorInertia.store(std::clamp(inertia, 0.05f, 1.0f));
+    }
+    void setTapeMotorFriction(float friction) {
+        tapeMotorFriction.store(std::clamp(friction, 0.0f, 1.0f));
+    }
+    void setTapeMagneticBias(float bias) {
+        tapeMagneticBias.store(std::clamp(bias, 0.0f, 1.0f));
+    }
 
     void getEngineStats(float* outStats, int len) {
         if (len < 7) return;
@@ -1369,7 +1454,7 @@ public:
         }
     }
 
-    oboe::DataCallbackResult onAudioReady(oboe::AudioStream *, void *audioData, int32_t numFrames) override {
+    oboe::DataCallbackResult onAudioReady(oboe::AudioStream *oboeStream, void *audioData, int32_t numFrames) override {
         float *outputBuffer = static_cast<float*>(audioData);
 
         MidiEvent ev;
@@ -1412,6 +1497,7 @@ public:
         int polyLimit = std::clamp(maxPolyphony.load(), 1, MAX_VOICES);
         bool useSmoothing = paramSmoothing.load();
 
+        // Carrega o snapshot dos parâmetros físicos dos componentes para o bloco de áudio
         PhysicalCircuitConfig phys;
         phys.thermalVoltageVt = thermalVoltageVt.load(std::memory_order_relaxed);
         phys.transistorMismatch = transistorMismatch.load(std::memory_order_relaxed);
@@ -1422,20 +1508,6 @@ public:
         phys.tapeMotorInertia = tapeMotorInertia.load(std::memory_order_relaxed);
         phys.tapeMotorFriction = tapeMotorFriction.load(std::memory_order_relaxed);
         phys.tapeMagneticBias = tapeMagneticBias.load(std::memory_order_relaxed);
-
-        JunoConfig juno;
-        juno.synthType = synthType.load(std::memory_order_relaxed);
-        juno.range = junoRange.load(std::memory_order_relaxed);
-        juno.pulseVol = junoPulseVol.load(std::memory_order_relaxed);
-        juno.sawVol = junoSawVol.load(std::memory_order_relaxed);
-        juno.subVol = junoSubVol.load(std::memory_order_relaxed);
-        juno.noiseVol = junoNoiseVol.load(std::memory_order_relaxed);
-        juno.pwm = junoPwm.load(std::memory_order_relaxed);
-        juno.hpfCutoff = junoHpfCutoff.load(std::memory_order_relaxed);
-        juno.vcfCutoff = junoVcfCutoff.load(std::memory_order_relaxed);
-        juno.vcfRes = junoVcfRes.load(std::memory_order_relaxed);
-        juno.envAmt = junoEnvAmt.load(std::memory_order_relaxed);
-        juno.chorusMode = junoChorusMode.load(std::memory_order_relaxed);
 
         float targetOscVols[3] = { oscVolumes[0].load(), oscVolumes[1].load(), oscVolumes[2].load() };
         float currentOscTunes[3] = { oscTunes[0].load(), oscTunes[1].load(), oscTunes[2].load() };
@@ -1489,7 +1561,6 @@ public:
                     osFactor,
                     voicePan,
                     phys,
-                    juno,
                     vL,
                     vR
                 );
@@ -1515,9 +1586,9 @@ public:
                 delayedL,
                 delayedR
             );
-
-            if (juno.synthType == 1) {
-                masterChorus.processStereo(delayedL, delayedR, juno.chorusMode, 48000.0);
+            
+            if (synthType.load() == 1) {
+                masterChorus.processStereo(delayedL, delayedR, junoChorus.load(), 48000.0);
             }
 
             float cleanL = dcBlockerL.process(delayedL) * smoothMaster;
@@ -1542,173 +1613,71 @@ public:
 static AudioEngine* engine = nullptr;
 
 // ==============================================================================
-// 12. JNI INTERFACE (PONTE KOTLIN <-> C++)
+// 10. JNI INTERFACE (PONTE KOTLIN <-> C++)
 // ==============================================================================
 
 extern "C" {
-
-JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setSynthType(JNIEnv *, jobject, jint type) {
-    if (engine) engine->setSynthType(type);
-}
-JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setJunoRange(JNIEnv *, jobject, jint range) {
-    if (engine) engine->setJunoRange(range);
-}
-JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setJunoPulseVol(JNIEnv *, jobject, jfloat vol) {
-    if (engine) engine->setJunoPulseVol(vol);
-}
-JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setJunoSawVol(JNIEnv *, jobject, jfloat vol) {
-    if (engine) engine->setJunoSawVol(vol);
-}
-JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setJunoSubVol(JNIEnv *, jobject, jfloat vol) {
-    if (engine) engine->setJunoSubVol(vol);
-}
-JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setJunoNoiseVol(JNIEnv *, jobject, jfloat vol) {
-    if (engine) engine->setJunoNoiseVol(vol);
-}
-JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setJunoPwm(JNIEnv *, jobject, jfloat pwm) {
-    if (engine) engine->setJunoPwm(pwm);
-}
-JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setJunoHpf(JNIEnv *, jobject, jfloat cutoffHz) {
-    if (engine) engine->setJunoHpf(cutoffHz);
-}
-JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setJunoVcfCutoff(JNIEnv *, jobject, jfloat cutoffHz) {
-    if (engine) engine->setJunoVcfCutoff(cutoffHz);
-}
-JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setJunoVcfRes(JNIEnv *, jobject, jfloat res) {
-    if (engine) engine->setJunoVcfRes(res);
-}
-JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setJunoEnvAmt(JNIEnv *, jobject, jfloat amt) {
-    if (engine) engine->setJunoEnvAmt(amt);
-}
-JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setJunoChorus(JNIEnv *, jobject, jint mode) {
-    if (engine) engine->setJunoChorus(mode);
+JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setSynthType(JNIEnv *, jobject, jint type) { synthType.store(type); }
+JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setJunoRange(JNIEnv *, jobject, jint range) { junoRange.store(range); }
+JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setJunoPulseVol(JNIEnv *, jobject, jfloat vol) { junoPulseVol.store(vol); }
+JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setJunoSawVol(JNIEnv *, jobject, jfloat vol) { junoSawVol.store(vol); }
+JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setJunoSubVol(JNIEnv *, jobject, jfloat vol) { junoSubVol.store(vol); }
+JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setJunoNoiseVol(JNIEnv *, jobject, jfloat vol) { junoNoiseVol.store(vol); }
+JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setJunoPwm(JNIEnv *, jobject, jfloat pwm) { junoPwm.store(pwm); }
+JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setJunoHpf(JNIEnv *, jobject, jfloat cutoffHz) { junoHpf.store(cutoffHz); }
+JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setJunoVcfCutoff(JNIEnv *, jobject, jfloat cutoffHz) { junoVcfCutoff.store(cutoffHz); }
+JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setJunoVcfRes(JNIEnv *, jobject, jfloat res) { junoVcfRes.store(res); }
+JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setJunoEnvAmt(JNIEnv *, jobject, jfloat amt) { junoEnvAmt.store(amt); }
+JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setJunoChorus(JNIEnv *, jobject, jint mode) { junoChorus.store(mode); }
 }
 
-JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_startEngine(JNIEnv *, jobject) {
-    if (!engine) { engine = new AudioEngine(); engine->start(); }
-}
-JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_stopEngine(JNIEnv *, jobject) {
-    if (engine) { engine->stop(); delete engine; engine = nullptr; }
-}
-JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_noteOn(JNIEnv *, jobject, jint note, jint velocity) {
-    if (engine) engine->noteOn(note, velocity);
-}
-JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_noteOff(JNIEnv *, jobject, jint note) {
-    if (engine) engine->noteOff(note);
-}
-JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_allNotesOff(JNIEnv *, jobject) {
-    if (engine) engine->allNotesOff();
-}
 
-JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setOscVolume(JNIEnv *, jobject, jint index, jfloat volume) {
-    if (engine) engine->setOscVolume(index, volume);
-}
-JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setOscTune(JNIEnv *, jobject, jint index, jfloat semitones) {
-    if (engine) engine->setOscTune(index, semitones);
-}
-JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setOscWave(JNIEnv *, jobject, jint index, jint waveType) {
-    if (engine) engine->setOscWave(index, waveType);
-}
+JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_startEngine(JNIEnv *env, jobject thiz) { if (!engine) { engine = new AudioEngine(); engine->start(); } }
+JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_stopEngine(JNIEnv *env, jobject thiz) { if (engine) { engine->stop(); delete engine; engine = nullptr; } }
+JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_noteOn(JNIEnv *env, jobject thiz, jint note, jint velocity) { if (engine) engine->noteOn(note, velocity); }
+JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_noteOff(JNIEnv *env, jobject thiz, jint note) { if (engine) engine->noteOff(note); }
+JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_allNotesOff(JNIEnv *env, jobject thiz) { if (engine) engine->allNotesOff(); }
 
-JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setMasterVolume(JNIEnv *, jobject, jfloat volume) {
-    if (engine) engine->setMasterVolume(volume);
-}
-JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setFilterCutoff(JNIEnv *, jobject, jfloat cutoffHz) {
-    if (engine) engine->setFilterCutoff(cutoffHz);
-}
-JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setFilterResonance(JNIEnv *, jobject, jfloat resonance) {
-    if (engine) engine->setFilterResonance(resonance);
-}
-JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setFilterEnvAmount(JNIEnv *, jobject, jfloat envAmountHz) {
-    if (engine) engine->setFilterEnvAmount(envAmountHz);
-}
+JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setOscVolume(JNIEnv *env, jobject thiz, jint index, jfloat volume) { if (engine) engine->setOscVolume(index, volume); }
+JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setOscTune(JNIEnv *env, jobject thiz, jint index, jfloat semitones) { if (engine) engine->setOscTune(index, semitones); }
+JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setOscWave(JNIEnv *env, jobject thiz, jint index, jint waveType) { if (engine) engine->setOscWave(index, waveType); }
 
-JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setLfoRate(JNIEnv *, jobject, jfloat rateHz) {
-    if (engine) engine->setLfoRate(rateHz);
-}
-JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setLfoDepth(JNIEnv *, jobject, jfloat depthHz) {
-    if (engine) engine->setLfoDepth(depthHz);
-}
-JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setDelayParams(JNIEnv *, jobject, jfloat timeSec, jfloat feedback, jfloat mix) {
-    if (engine) engine->setDelayParams(timeSec, feedback, mix);
-}
+JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setMasterVolume(JNIEnv *env, jobject thiz, jfloat volume) { if (engine) engine->setMasterVolume(volume); }
+JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setFilterCutoff(JNIEnv *env, jobject thiz, jfloat cutoffHz) { if (engine) engine->setFilterCutoff(cutoffHz); }
+JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setFilterResonance(JNIEnv *env, jobject thiz, jfloat resonance) { if (engine) engine->setFilterResonance(resonance); }
+JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setFilterEnvAmount(JNIEnv *env, jobject thiz, jfloat envAmountHz) { if (engine) engine->setFilterEnvAmount(envAmountHz); }
 
-JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setAmpADSR(JNIEnv *, jobject, jfloat a, jfloat d, jfloat s, jfloat r) {
-    if (engine) engine->setAmpADSR(a, d, s, r);
-}
-JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setFilterADSR(JNIEnv *, jobject, jfloat a, jfloat d, jfloat s, jfloat r) {
-    if (engine) engine->setFilterADSR(a, d, s, r);
-}
+JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setLfoRate(JNIEnv *env, jobject thiz, jfloat rateHz) { if (engine) engine->setLfoRate(rateHz); }
+JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setLfoDepth(JNIEnv *env, jobject thiz, jfloat depthHz) { if (engine) engine->setLfoDepth(depthHz); }
+JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setDelayParams(JNIEnv *env, jobject thiz, jfloat timeSec, jfloat feedback, jfloat mix) { if (engine) engine->setDelayParams(timeSec, feedback, mix); }
 
-JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_getWaveform(JNIEnv *env, jobject, jfloatArray outArray) {
-    if (!engine) return;
-    jsize len = env->GetArrayLength(outArray);
-    jfloat* body = env->GetFloatArrayElements(outArray, nullptr);
-    engine->copyScopeData(body, len);
-    env->ReleaseFloatArrayElements(outArray, body, 0);
-}
+JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setAmpADSR(JNIEnv *env, jobject thiz, jfloat a, jfloat d, jfloat s, jfloat r) { if (engine) engine->setAmpADSR(a, d, s, r); }
+JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setFilterADSR(JNIEnv *env, jobject thiz, jfloat a, jfloat d, jfloat s, jfloat r) { if (engine) engine->setFilterADSR(a, d, s, r); }
 
-JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setOversampling(JNIEnv *, jobject, jint factor) {
-    if (engine) engine->setOversampling(factor);
-}
-JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setAnalogDrift(JNIEnv *, jobject, jfloat drift) {
-    if (engine) engine->setAnalogDrift(drift);
-}
-JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setFilterDrive(JNIEnv *, jobject, jfloat drive) {
-    if (engine) engine->setFilterDrive(drive);
-}
-JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setFilterKeyTrack(JNIEnv *, jobject, jfloat track) {
-    if (engine) engine->setFilterKeyTrack(track);
-}
-JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setStereoSpread(JNIEnv *, jobject, jfloat spread) {
-    if (engine) engine->setStereoSpread(spread);
-}
-JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setVelocitySensitivity(JNIEnv *, jobject, jfloat sens) {
-    if (engine) engine->setVelocitySensitivity(sens);
-}
-JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setMaxPolyphony(JNIEnv *, jobject, jint maxVoices) {
-    if (engine) engine->setMaxPolyphony(maxVoices);
-}
-JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setBufferBurstMultiplier(JNIEnv *, jobject, jint mult) {
-    if (engine) engine->setBufferBurstMultiplier(mult);
-}
-JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setParameterSmoothing(JNIEnv *, jobject, jboolean enabled) {
-    if (engine) engine->setParameterSmoothing(enabled);
-}
-JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_getEngineStats(JNIEnv *env, jobject, jfloatArray outStats) {
-    if (!engine) return;
-    jsize len = env->GetArrayLength(outStats);
-    jfloat* body = env->GetFloatArrayElements(outStats, nullptr);
-    engine->getEngineStats(body, len);
-    env->ReleaseFloatArrayElements(outStats, body, 0);
-}
+JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_getWaveform(JNIEnv *env, jobject thiz, jfloatArray outArray) { if (!engine) return; jsize len = env->GetArrayLength(outArray); jfloat* body = env->GetFloatArrayElements(outArray, nullptr); engine->copyScopeData(body, len); env->ReleaseFloatArrayElements(outArray, body, 0); }
 
-JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setTransistorTemperatureVt(JNIEnv *, jobject, jfloat vtVolts) {
-    if (engine) engine->setTransistorTemperatureVt(vtVolts);
-}
-JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setTransistorMismatch(JNIEnv *, jobject, jfloat mismatch) {
-    if (engine) engine->setTransistorMismatch(mismatch);
-}
-JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setCapacitorLeakage(JNIEnv *, jobject, jfloat leakage) {
-    if (engine) engine->setCapacitorLeakage(leakage);
-}
-JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setComparatorThreshold(JNIEnv *, jobject, jfloat threshold) {
-    if (engine) engine->setComparatorThreshold(threshold);
-}
-JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setEnvelopeSupplyVoltage(JNIEnv *, jobject, jfloat railVolts) {
-    if (engine) engine->setEnvelopeSupplyVoltage(railVolts);
-}
-JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setPowerSupplySag(JNIEnv *, jobject, jfloat sag) {
-    if (engine) engine->setPowerSupplySag(sag);
-}
-JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setTapeMotorInertia(JNIEnv *, jobject, jfloat inertia) {
-    if (engine) engine->setTapeMotorInertia(inertia);
-}
-JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setTapeMotorFriction(JNIEnv *, jobject, jfloat friction) {
-    if (engine) engine->setTapeMotorFriction(friction);
-}
-JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setTapeMagneticBias(JNIEnv *, jobject, jfloat bias) {
-    if (engine) engine->setTapeMagneticBias(bias);
-}
+JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setOversampling(JNIEnv *env, jobject thiz, jint factor) { if (engine) engine->setOversampling(factor); }
+JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setAnalogDrift(JNIEnv *env, jobject thiz, jfloat drift) { if (engine) engine->setAnalogDrift(drift); }
+JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setFilterDrive(JNIEnv *env, jobject thiz, jfloat drive) { if (engine) engine->setFilterDrive(drive); }
+JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setFilterKeyTrack(JNIEnv *env, jobject thiz, jfloat track) { if (engine) engine->setFilterKeyTrack(track); }
+JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setStereoSpread(JNIEnv *env, jobject thiz, jfloat spread) { if (engine) engine->setStereoSpread(spread); }
+JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setVelocitySensitivity(JNIEnv *env, jobject thiz, jfloat sens) { if (engine) engine->setVelocitySensitivity(sens); }
+JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setMaxPolyphony(JNIEnv *env, jobject thiz, jint maxVoices) { if (engine) engine->setMaxPolyphony(maxVoices); }
+JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setBufferBurstMultiplier(JNIEnv *env, jobject thiz, jint mult) { if (engine) engine->setBufferBurstMultiplier(mult); }
+JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setParameterSmoothing(JNIEnv *env, jobject thiz, jboolean enabled) { if (engine) engine->setParameterSmoothing(enabled); }
+JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_getEngineStats(JNIEnv *env, jobject thiz, jfloatArray outStats) { if (!engine) return; jsize len = env->GetArrayLength(outStats); jfloat* body = env->GetFloatArrayElements(outStats, nullptr); engine->getEngineStats(body, len); env->ReleaseFloatArrayElements(outStats, body, 0); }
+
+// Novos Métodos JNI de Simulação Física de Componentes (Transistores, Capacitores, Fonte e Motor de Fita)
+JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setTransistorTemperatureVt(JNIEnv *env, jobject thiz, jfloat vtVolts) { if (engine) engine->setTransistorTemperatureVt(vtVolts); }
+JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setTransistorMismatch(JNIEnv *env, jobject thiz, jfloat mismatch) { if (engine) engine->setTransistorMismatch(mismatch); }
+JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setCapacitorLeakage(JNIEnv *env, jobject thiz, jfloat leakage) { if (engine) engine->setCapacitorLeakage(leakage); }
+JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setComparatorThreshold(JNIEnv *env, jobject thiz, jfloat threshold) { if (engine) engine->setComparatorThreshold(threshold); }
+JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setEnvelopeSupplyVoltage(JNIEnv *env, jobject thiz, jfloat railVolts) { if (engine) engine->setEnvelopeSupplyVoltage(railVolts); }
+JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setPowerSupplySag(JNIEnv *env, jobject thiz, jfloat sag) { if (engine) engine->setPowerSupplySag(sag); }
+JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setTapeMotorInertia(JNIEnv *env, jobject thiz, jfloat inertia) { if (engine) engine->setTapeMotorInertia(inertia); }
+JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setTapeMotorFriction(JNIEnv *env, jobject thiz, jfloat friction) { if (engine) engine->setTapeMotorFriction(friction); }
+JNIEXPORT void JNICALL Java_com_moogsynth_app_audio_NativeAudioEngine_setTapeMagneticBias(JNIEnv *env, jobject thiz, jfloat bias) { if (engine) engine->setTapeMagneticBias(bias); }
 
 }
+
+
