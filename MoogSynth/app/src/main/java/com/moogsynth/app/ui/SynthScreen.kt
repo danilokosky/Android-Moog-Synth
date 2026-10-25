@@ -92,51 +92,63 @@ fun getDefaultLaunchkeyMK4Mappings(): Map<String, Int> = mapOf(
 
 fun getFactoryPresets(): List<SynthPreset> = listOf(
     SynthPreset(
-        name = "1. Classic Minimoog Lead",
-        osc1Vol = 0.85f, osc1Tune = 0.50f, osc1Wave = 0,
-        osc2Vol = 0.75f, osc2Tune = 0.50f, osc2Wave = 0,
-        osc3Vol = 0.60f, osc3Tune = 0.25f, osc3Wave = 0,
-        cutoffNorm = 0.62f, resNorm = 0.25f, envAmtNorm = 0.50f,
-        fAttack = 0.02f, fDecay = 0.30f, fSustain = 0.35f, fRelease = 0.25f,
-        lfoRateNorm = 0.28f, lfoDepthNorm = 0.03f,
-        delayTimeNorm = 0.35f, delayFbNorm = 0.40f, delayMixNorm = 0.25f,
-        aAttack = 0.01f, aDecay = 0.30f, aSustain = 0.85f, aRelease = 0.22f,
+        name = "1. Pure Analog Init (3 OSC)",
+        osc1Vol = 0.80f, osc1Tune = 0.50f, osc1Wave = 0,
+        osc2Vol = 0.65f, osc2Tune = 0.50f, osc2Wave = 1,
+        osc3Vol = 0.55f, osc3Tune = 0.25f, osc3Wave = 2,
+        cutoffNorm = 0.78f, resNorm = 0.15f, envAmtNorm = 0.45f,
+        fAttack = 0.01f, fDecay = 0.28f, fSustain = 0.45f, fRelease = 0.22f,
+        lfoRateNorm = 0.25f, lfoDepthNorm = 0.0f,
+        delayTimeNorm = 0.35f, delayFbNorm = 0.35f, delayMixNorm = 0.0f,
+        aAttack = 0.005f, aDecay = 0.25f, aSustain = 0.85f, aRelease = 0.20f,
         masterNorm = 0.85f
     ),
     SynthPreset(
-        name = "2. Taurus Sub Bass",
-        osc1Vol = 0.90f, osc1Tune = 0.25f, osc1Wave = 0,
-        osc2Vol = 0.85f, osc2Tune = 0.25f, osc2Wave = 1,
-        osc3Vol = 0.70f, osc3Tune = 0.50f, osc3Wave = 2,
-        cutoffNorm = 0.30f, resNorm = 0.30f, envAmtNorm = 0.55f,
-        fAttack = 0.005f, fDecay = 0.18f, fSustain = 0.12f, fRelease = 0.15f,
+        name = "2. Classic Minimoog Lead",
+        osc1Vol = 0.85f, osc1Tune = 0.50f, osc1Wave = 0,
+        osc2Vol = 0.70f, osc2Tune = 0.50f, osc2Wave = 0,
+        osc3Vol = 0.55f, osc3Tune = 0.25f, osc3Wave = 0,
+        cutoffNorm = 0.68f, resNorm = 0.22f, envAmtNorm = 0.50f,
+        fAttack = 0.015f, fDecay = 0.30f, fSustain = 0.40f, fRelease = 0.25f,
+        lfoRateNorm = 0.28f, lfoDepthNorm = 0.02f,
+        delayTimeNorm = 0.35f, delayFbNorm = 0.38f, delayMixNorm = 0.18f,
+        aAttack = 0.008f, aDecay = 0.30f, aSustain = 0.85f, aRelease = 0.22f,
+        masterNorm = 0.85f
+    ),
+    SynthPreset(
+        name = "3. Taurus Pure Sub Bass",
+        osc1Vol = 0.85f, osc1Tune = 0.25f, osc1Wave = 0,
+        osc2Vol = 0.75f, osc2Tune = 0.25f, osc2Wave = 1,
+        osc3Vol = 0.65f, osc3Tune = 0.50f, osc3Wave = 2,
+        cutoffNorm = 0.42f, resNorm = 0.20f, envAmtNorm = 0.52f,
+        fAttack = 0.005f, fDecay = 0.20f, fSustain = 0.20f, fRelease = 0.15f,
         lfoRateNorm = 0.15f, lfoDepthNorm = 0.0f,
         delayTimeNorm = 0.25f, delayFbNorm = 0.15f, delayMixNorm = 0.0f,
-        aAttack = 0.005f, aDecay = 0.25f, aSustain = 0.80f, aRelease = 0.15f,
-        masterNorm = 0.90f
+        aAttack = 0.005f, aDecay = 0.25f, aSustain = 0.85f, aRelease = 0.15f,
+        masterNorm = 0.88f
     ),
     SynthPreset(
-        name = "3. Lucky Man Solo",
+        name = "4. Lucky Man Solo",
         osc1Vol = 0.85f, osc1Tune = 0.50f, osc1Wave = 1,
-        osc2Vol = 0.75f, osc2Tune = 0.75f, osc2Wave = 1,
-        osc3Vol = 0.65f, osc3Tune = 0.25f, osc3Wave = 2,
-        cutoffNorm = 0.68f, resNorm = 0.22f, envAmtNorm = 0.40f,
-        fAttack = 0.03f, fDecay = 0.35f, fSustain = 0.50f, fRelease = 0.35f,
-        lfoRateNorm = 0.30f, lfoDepthNorm = 0.05f,
-        delayTimeNorm = 0.42f, delayFbNorm = 0.45f, delayMixNorm = 0.30f,
-        aAttack = 0.02f, aDecay = 0.30f, aSustain = 0.90f, aRelease = 0.35f,
+        osc2Vol = 0.70f, osc2Tune = 0.75f, osc2Wave = 1,
+        osc3Vol = 0.60f, osc3Tune = 0.25f, osc3Wave = 2,
+        cutoffNorm = 0.72f, resNorm = 0.20f, envAmtNorm = 0.40f,
+        fAttack = 0.025f, fDecay = 0.35f, fSustain = 0.55f, fRelease = 0.35f,
+        lfoRateNorm = 0.30f, lfoDepthNorm = 0.04f,
+        delayTimeNorm = 0.40f, delayFbNorm = 0.40f, delayMixNorm = 0.22f,
+        aAttack = 0.015f, aDecay = 0.30f, aSustain = 0.90f, aRelease = 0.35f,
         masterNorm = 0.85f
     ),
     SynthPreset(
-        name = "4. Blade Runner Brass",
-        osc1Vol = 0.85f, osc1Tune = 0.50f, osc1Wave = 0,
-        osc2Vol = 0.80f, osc2Tune = 0.50f, osc2Wave = 0,
-        osc3Vol = 0.55f, osc3Tune = 0.25f, osc3Wave = 1,
-        cutoffNorm = 0.40f, resNorm = 0.20f, envAmtNorm = 0.68f,
-        fAttack = 0.18f, fDecay = 0.45f, fSustain = 0.55f, fRelease = 0.45f,
-        lfoRateNorm = 0.22f, lfoDepthNorm = 0.04f,
-        delayTimeNorm = 0.48f, delayFbNorm = 0.50f, delayMixNorm = 0.35f,
-        aAttack = 0.12f, aDecay = 0.40f, aSustain = 0.85f, aRelease = 0.50f,
+        name = "5. Blade Runner Brass",
+        osc1Vol = 0.80f, osc1Tune = 0.50f, osc1Wave = 0,
+        osc2Vol = 0.75f, osc2Tune = 0.50f, osc2Wave = 0,
+        osc3Vol = 0.50f, osc3Tune = 0.25f, osc3Wave = 1,
+        cutoffNorm = 0.48f, resNorm = 0.18f, envAmtNorm = 0.65f,
+        fAttack = 0.16f, fDecay = 0.45f, fSustain = 0.60f, fRelease = 0.45f,
+        lfoRateNorm = 0.22f, lfoDepthNorm = 0.03f,
+        delayTimeNorm = 0.45f, delayFbNorm = 0.42f, delayMixNorm = 0.25f,
+        aAttack = 0.10f, aDecay = 0.40f, aSustain = 0.85f, aRelease = 0.48f,
         masterNorm = 0.85f
     )
 )
@@ -146,42 +158,44 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("moog_midi_slots_prefs", Context.MODE_PRIVATE) }
 
-    var osc1Vol by remember { mutableStateOf(0.75f) }
-    var osc1Tune by remember { mutableStateOf(0.5f) }
+    // Estado inicial padrão 100% puro e afinado (OSC1=0st, OSC2=0st, OSC3=-12st, Delay Mix=0%)
+    var osc1Vol by remember { mutableStateOf(0.80f) }
+    var osc1Tune by remember { mutableStateOf(0.50f) }
     var osc1Wave by remember { mutableStateOf(0) }
-    var osc2Vol by remember { mutableStateOf(0.55f) }
-    var osc2Tune by remember { mutableStateOf(0.25f) }
+    var osc2Vol by remember { mutableStateOf(0.65f) }
+    var osc2Tune by remember { mutableStateOf(0.50f) }
     var osc2Wave by remember { mutableStateOf(1) }
-    var osc3Vol by remember { mutableStateOf(0.45f) }
-    var osc3Tune by remember { mutableStateOf(0.645f) }
+    var osc3Vol by remember { mutableStateOf(0.55f) }
+    var osc3Tune by remember { mutableStateOf(0.25f) }
     var osc3Wave by remember { mutableStateOf(2) }
 
-    var cutoffNorm by remember { mutableStateOf(0.65f) }
-    var resNorm by remember { mutableStateOf(0.25f) }
-    var envAmtNorm by remember { mutableStateOf(0.5f) }
-    var fAttack by remember { mutableStateOf(0.05f) }
-    var fDecay by remember { mutableStateOf(0.25f) }
-    var fSustain by remember { mutableStateOf(0.2f) }
-    var fRelease by remember { mutableStateOf(0.3f) }
+    var cutoffNorm by remember { mutableStateOf(0.78f) }
+    var resNorm by remember { mutableStateOf(0.15f) }
+    var envAmtNorm by remember { mutableStateOf(0.45f) }
+    var fAttack by remember { mutableStateOf(0.01f) }
+    var fDecay by remember { mutableStateOf(0.28f) }
+    var fSustain by remember { mutableStateOf(0.45f) }
+    var fRelease by remember { mutableStateOf(0.22f) }
 
     var lfoRateNorm by remember { mutableStateOf(0.25f) }
     var lfoDepthNorm by remember { mutableStateOf(0.0f) }
     var delayTimeNorm by remember { mutableStateOf(0.35f) }
-    var delayFbNorm by remember { mutableStateOf(0.4f) }
-    var delayMixNorm by remember { mutableStateOf(0.2f) }
+    var delayFbNorm by remember { mutableStateOf(0.35f) }
+    var delayMixNorm by remember { mutableStateOf(0.0f) }
 
-    var aAttack by remember { mutableStateOf(0.02f) }
-    var aDecay by remember { mutableStateOf(0.3f) }
-    var aSustain by remember { mutableStateOf(0.7f) }
-    var aRelease by remember { mutableStateOf(0.3f) }
+    var aAttack by remember { mutableStateOf(0.005f) }
+    var aDecay by remember { mutableStateOf(0.25f) }
+    var aSustain by remember { mutableStateOf(0.85f) }
+    var aRelease by remember { mutableStateOf(0.20f) }
     var masterNorm by remember { mutableStateOf(0.85f) }
 
     var showAudioSettingsDialog by remember { mutableStateOf(false) }
     var oversamplingFactor by remember { mutableStateOf(2) }
-    var analogDrift by remember { mutableStateOf(0.35f) }
-    var filterDrive by remember { mutableStateOf(0.25f) }
+    // Calibração padrão 100% Pura: Filter Drive = 0% (linear), Drift sutil = 5%, Spread = 15%
+    var analogDrift by remember { mutableStateOf(0.05f) }
+    var filterDrive by remember { mutableStateOf(0.0f) }
     var filterKeyTrack by remember { mutableStateOf(0.50f) }
-    var stereoSpread by remember { mutableStateOf(0.45f) }
+    var stereoSpread by remember { mutableStateOf(0.15f) }
     var velocitySens by remember { mutableStateOf(0.35f) }
     var maxPolyphony by remember { mutableStateOf(16) }
     var bufferBurstMult by remember { mutableStateOf(2) }
@@ -206,7 +220,7 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
         obj.put("maxPolyphony", maxPolyphony)
         obj.put("bufferBurstMult", bufferBurstMult)
         obj.put("paramSmoothing", paramSmoothing)
-        prefs.edit().putString("saved_engine_dsp_settings_json", obj.toString()).commit()
+        prefs.edit().putString("saved_engine_dsp_settings_v3_json", obj.toString()).commit()
     }
 
     fun applyEngineSettingsToNative() {
@@ -223,7 +237,7 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
 
     fun normToCutoffHz(norm: Float): Float {
         val minHz = 20f
-        val maxHz = 12000f
+        val maxHz = 18000f
         return exp(norm * (ln(maxHz) - ln(minHz)) + ln(minHz))
     }
     fun normToSemitones(norm: Float): Float = ((norm * 48f) - 24f).roundToInt().toFloat()
@@ -264,7 +278,7 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
             arr.put(o)
         }
         root.put("presets", arr)
-        prefs.edit().putString("saved_synth_presets_v2_json", root.toString()).commit()
+        prefs.edit().putString("saved_synth_presets_v3_json", root.toString()).commit()
     }
 
     fun saveCurrentStateToActivePresetExplicitly() {
@@ -367,15 +381,15 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
     }
 
     LaunchedEffect(Unit) {
-        val rawDspJson = prefs.getString("saved_engine_dsp_settings_json", null)
+        val rawDspJson = prefs.getString("saved_engine_dsp_settings_v3_json", null)
         if (rawDspJson != null) {
             try {
                 val o = JSONObject(rawDspJson)
                 oversamplingFactor = o.optInt("oversamplingFactor", 2)
-                analogDrift = o.optDouble("analogDrift", 0.35).toFloat()
-                filterDrive = o.optDouble("filterDrive", 0.25).toFloat()
+                analogDrift = o.optDouble("analogDrift", 0.05).toFloat()
+                filterDrive = o.optDouble("filterDrive", 0.0).toFloat()
                 filterKeyTrack = o.optDouble("filterKeyTrack", 0.50).toFloat()
-                stereoSpread = o.optDouble("stereoSpread", 0.45).toFloat()
+                stereoSpread = o.optDouble("stereoSpread", 0.15).toFloat()
                 velocitySens = o.optDouble("velocitySens", 0.35).toFloat()
                 maxPolyphony = o.optInt("maxPolyphony", 16)
                 bufferBurstMult = o.optInt("bufferBurstMult", 2)
@@ -434,7 +448,7 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
             saveSlotsToDisk(midiSlots, defaultSlot.id)
         }
 
-        val rawPresetsJson = prefs.getString("saved_synth_presets_v2_json", null)
+        val rawPresetsJson = prefs.getString("saved_synth_presets_v3_json", null)
         if (rawPresetsJson != null) {
             try {
                 val root = JSONObject(rawPresetsJson)
@@ -575,7 +589,7 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "⚙️ MOTOR DE ÁUDIO & DSP",
+                            text = "⚙️ MOTOR DE ÁUDIO & DSP (PURE ANALOG)",
                             color = Color(0xFFF59E0B),
                             fontSize = 14.sp,
                             fontWeight = FontWeight.ExtraBold
@@ -585,20 +599,20 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
                                 .background(Color(0xFF1E293B), RoundedCornerShape(6.dp))
                                 .border(1.dp, Color(0xFF334155), RoundedCornerShape(6.dp))
                                 .clickable {
-                                    oversamplingFactor = 2; analogDrift = 0.35f; filterDrive = 0.25f
-                                    filterKeyTrack = 0.50f; stereoSpread = 0.45f; velocitySens = 0.35f
+                                    oversamplingFactor = 2; analogDrift = 0.05f; filterDrive = 0.0f
+                                    filterKeyTrack = 0.50f; stereoSpread = 0.15f; velocitySens = 0.35f
                                     maxPolyphony = 16; bufferBurstMult = 2; paramSmoothing = true
                                     applyEngineSettingsToNative()
                                     saveEngineSettingsToDisk()
                                 }
                                 .padding(horizontal = 8.dp, vertical = 6.dp)
                         ) {
-                            Text("↺ RESET", color = Color(0xFF38BDF8), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            Text("↺ MODO PURO (RESET)", color = Color(0xFF38BDF8), fontSize = 10.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Calibração Acústica Moog + Performance Oboe",
+                        text = "Caminho de Sinal Linear 64-Bit + Filtro Moog TPT Zero-Delay Feedback",
                         color = Color(0xFF94A3B8),
                         fontSize = 10.sp,
                         lineHeight = 14.sp
@@ -633,7 +647,7 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
                         Text("OVERSAMPLING DO FILTRO MOOG LADDER", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         Spacer(modifier = Modifier.height(6.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            listOf(1 to "1x (Eco / Leve)", 2 to "2x (Studio HD)", 4 to "4x (Ultra Analog)").forEach { (factor, title) ->
+                            listOf(1 to "1x (Nativo)", 2 to "2x (Studio Pure)", 4 to "4x (Ultra HD)").forEach { (factor, title) ->
                                 val selected = (oversamplingFactor == factor)
                                 Box(modifier = Modifier.weight(1f).background(if (selected) Color(0xFFF59E0B) else Color(0xFF0F1115), RoundedCornerShape(6.dp)).border(1.dp, if (selected) Color(0xFFFDE047) else Color(0xFF334155), RoundedCornerShape(6.dp)).clickable { oversamplingFactor = factor; audioEngine.setOversampling(factor); saveEngineSettingsToDisk() }.padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
                                     Text(title, color = if (selected) Color.Black else Color.LightGray, fontSize = 10.sp, fontWeight = FontWeight.Bold)
@@ -642,10 +656,10 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
                         }
                     }
 
-                    DspSliderRow("ANALOG DRIFT (INSTABILIDADE VCO/VCF)", "Micro-flutuações orgânicas", analogDrift, "${(analogDrift * 100).toInt()}%") { analogDrift = it; audioEngine.setAnalogDrift(it); saveEngineSettingsToDisk() }
-                    DspSliderRow("FILTER DRIVE (SATURAÇÃO)", "Calor harmônico de entrada", filterDrive, "${(filterDrive * 100).toInt()}%") { filterDrive = it; audioEngine.setFilterDrive(it); saveEngineSettingsToDisk() }
-                    DspSliderRow("KEYBOARD TRACKING (1V/OCT)", "Filtro acompanha as notas agudas", filterKeyTrack, "${(filterKeyTrack * 100).toInt()}%") { filterKeyTrack = it; audioEngine.setFilterKeyTrack(it); saveEngineSettingsToDisk() }
-                    DspSliderRow("ABERTURA ESTÉREO & TAPE WOW", "Espacialização e fita do Delay", stereoSpread, "${(stereoSpread * 100).toInt()}%") { stereoSpread = it; audioEngine.setStereoSpread(it); saveEngineSettingsToDisk() }
+                    DspSliderRow("ANALOG DRIFT (INSTABILIDADE VCO)", "0% = Precisão absoluta | Acima = Micro-flutuação", analogDrift, "${(analogDrift * 100).toInt()}%") { analogDrift = it; audioEngine.setAnalogDrift(it); saveEngineSettingsToDisk() }
+                    DspSliderRow("FILTER DRIVE (SATURAÇÃO DE ENTRADA)", "0% = 100% Linear e Puro (Sem achatar a onda)", filterDrive, "${(filterDrive * 100).toInt()}%") { filterDrive = it; audioEngine.setFilterDrive(it); saveEngineSettingsToDisk() }
+                    DspSliderRow("KEYBOARD TRACKING (1V/OCT)", "Filtro acompanha harmonicamente a nota tocada", filterKeyTrack, "${(filterKeyTrack * 100).toInt()}%") { filterKeyTrack = it; audioEngine.setFilterKeyTrack(it); saveEngineSettingsToDisk() }
+                    DspSliderRow("ABERTURA ESTÉREO (CONSTANT-POWER PAN)", "Espacialização pura sem defasagem de tempo", stereoSpread, "${(stereoSpread * 100).toInt()}%") { stereoSpread = it; audioEngine.setStereoSpread(it); saveEngineSettingsToDisk() }
                     DspSliderRow("SENSIBILIDADE AO VELOCITY MIDI", "Força nas teclas afeta volume/brilho", velocitySens, "${(velocitySens * 100).toInt()}%") { velocitySens = it; audioEngine.setVelocitySensitivity(it); saveEngineSettingsToDisk() }
 
                     Spacer(modifier = Modifier.height(4.dp))
@@ -680,7 +694,7 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
                     Row(modifier = Modifier.fillMaxWidth().background(Color(0xFF1C2026), RoundedCornerShape(8.dp)).padding(horizontal = 12.dp, vertical = 8.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text("SUAVIZAÇÃO DE KNOBS (ANTI-ZIPPER)", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            Text("Elimina degraus digitais no Cutoff via MIDI CC.", color = Color(0xFF94A3B8), fontSize = 10.sp)
+                            Text("Elimina degraus digitais no Cutoff e Volumes via MIDI CC.", color = Color(0xFF94A3B8), fontSize = 10.sp)
                         }
                         Switch(checked = paramSmoothing, onCheckedChange = { paramSmoothing = it; audioEngine.setParameterSmoothing(it); saveEngineSettingsToDisk() }, colors = SwitchDefaults.colors(checkedThumbColor = Color(0xFFF59E0B), checkedTrackColor = Color(0xFF78350F)))
                     }
@@ -776,7 +790,7 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
                     } else if (isPresetDirty) {
                         "TIMBRE EDITADO (Não Salvo) | Clique em SALVAR"
                     } else {
-                        "TIMBRE: $currentPresetName | DSP: ${oversamplingFactor}x OS"
+                        "TIMBRE: $currentPresetName | DSP: ${oversamplingFactor}x PURE LINEAR"
                     },
                     color = if (isMidiLearnMode || isPresetDirty) Color(0xFFFBBF24) else Color(0xFF94A3B8), fontSize = 10.sp, fontWeight = FontWeight.Bold
                 )
@@ -824,7 +838,7 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
                         }
                         Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color(0xFF334155)))
                         DropdownMenuItem(text = { Text("+ SALVAR COMO NOVO PRESET...", color = Color(0xFFF59E0B), fontSize = 11.sp, fontWeight = FontWeight.Bold) }, onClick = { isPresetDropdownExpanded = false; nameInputText = "User Patch ${presetsList.size + 1}"; dialogTargetIsPreset = true; isCreatingNewItem = true; showNameDialog = true })
-                        DropdownMenuItem(text = { Text("↺ RESTAURAR 8 PRESETS DE FÁBRICA", color = Color(0xFF94A3B8), fontSize = 10.sp, fontWeight = FontWeight.Bold) }, onClick = { isPresetDropdownExpanded = false; val factory = getFactoryPresets(); presetsList.clear(); presetsList.addAll(factory); applyPresetToEngine(factory.first()) })
+                        DropdownMenuItem(text = { Text("↺ RESTAURAR PRESETS DE FÁBRICA PUROS", color = Color(0xFF94A3B8), fontSize = 10.sp, fontWeight = FontWeight.Bold) }, onClick = { isPresetDropdownExpanded = false; val factory = getFactoryPresets(); presetsList.clear(); presetsList.addAll(factory); applyPresetToEngine(factory.first()) })
                     }
                 }
                 Box {
@@ -881,7 +895,7 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
         }
 
         Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            ModuleBox(title = "OSCILADORES (POLYBLEP)") {
+            ModuleBox(title = "OSCILADORES 64-BIT (POLYBLEP/BLAMP)") {
                 OscillatorRow(label = "OSC 1", wave = osc1Wave, onWaveChange = { osc1Wave = it; audioEngine.setOscWave(0, it); isPresetDirty = true }, levelKnob = { SmartKnob("OSC1_VOL", "LEVEL", "${(osc1Vol * 100).toInt()}%", osc1Vol) }, tuneKnob = { val st = normToSemitones(osc1Tune).toInt(); SmartKnob("OSC1_TUNE", "TUNE", "${if (st > 0) "+$st" else st} st", osc1Tune) })
                 Spacer(modifier = Modifier.height(12.dp))
                 OscillatorRow(label = "OSC 2", wave = osc2Wave, onWaveChange = { osc2Wave = it; audioEngine.setOscWave(1, it); isPresetDirty = true }, levelKnob = { SmartKnob("OSC2_VOL", "LEVEL", "${(osc2Vol * 100).toInt()}%", osc2Vol) }, tuneKnob = { val st = normToSemitones(osc2Tune).toInt(); SmartKnob("OSC2_TUNE", "TUNE", "${if (st > 0) "+$st" else st} st", osc2Tune) })
@@ -889,11 +903,11 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
                 OscillatorRow(label = "OSC 3", wave = osc3Wave, onWaveChange = { osc3Wave = it; audioEngine.setOscWave(2, it); isPresetDirty = true }, levelKnob = { SmartKnob("OSC3_VOL", "LEVEL", "${(osc3Vol * 100).toInt()}%", osc3Vol) }, tuneKnob = { val st = normToSemitones(osc3Tune).toInt(); SmartKnob("OSC3_TUNE", "TUNE", "${if (st > 0) "+$st" else st} st", osc3Tune) })
             }
 
-            ModuleBox(title = "FILTRO MOOG 24dB (VCF)") {
+            ModuleBox(title = "FILTRO MOOG 24dB TPT (LINEAR-CORE)") {
                 Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
                     SmartKnob("CUTOFF", "CORTE", "${normToCutoffHz(cutoffNorm).toInt()} Hz", cutoffNorm)
                     SmartKnob("RESONANCE", "RESSON.", "${(resNorm * 100).toInt()}%", resNorm)
-                    SmartKnob("ENV_AMT", "ENV AMT", "${"%.1f".format(envAmtNorm * 4.8f)} Oct", envAmtNorm)
+                    SmartKnob("ENV_AMT", "ENV AMT", "${"%.1f".format(envAmtNorm * 4.5f)} Oct", envAmtNorm)
                 }
                 Spacer(modifier = Modifier.height(18.dp))
                 Text("ENVELOPE RC EXPONENCIAL (ADSR)", color = Color(0xFF94A3B8), fontSize = 11.sp, fontWeight = FontWeight.Bold)
@@ -906,7 +920,7 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
                 }
             }
 
-            ModuleBox(title = "MODULAÇÃO (LFO) & DELAY") {
+            ModuleBox(title = "MODULAÇÃO (LFO) & MASTER DELAY") {
                 Text("LFO -> FILTRO MOOG (1V/OCT)", color = Color(0xFF94A3B8), fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(10.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(22.dp)) {
@@ -914,7 +928,7 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
                     SmartKnob("LFO_DEPTH", "LFO DEPTH", "${(lfoDepthNorm * 100).toInt()}%", lfoDepthNorm)
                 }
                 Spacer(modifier = Modifier.height(18.dp))
-                Text("STEREO TAPE DELAY (WOW & FLUTTER)", color = Color(0xFF94A3B8), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Text("PARALLEL SEND TAPE DELAY (DRY 100% PURO)", color = Color(0xFF94A3B8), fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(10.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                     SmartKnob("DELAY_TIME", "TIME", "${((0.05f + delayTimeNorm * 0.95f) * 1000).toInt()}ms", delayTimeNorm)
@@ -923,7 +937,7 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
                 }
             }
 
-            ModuleBox(title = "AMPLIFICADOR (VCA) & SAÍDA") {
+            ModuleBox(title = "AMPLIFICADOR (VCA) & MASTER") {
                 Text("ENVELOPE DE VOLUME RC (ADSR)", color = Color(0xFF94A3B8), fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(10.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
