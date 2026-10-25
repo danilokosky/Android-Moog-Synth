@@ -92,7 +92,7 @@ fun getDefaultLaunchkeyMK4Mappings(): Map<String, Int> = mapOf(
 
 fun getFactoryPresets(): List<SynthPreset> = listOf(
     SynthPreset(
-        name = "1. Pure Analog Init (3 OSC)",
+        name = "1. Pure Analog Init",
         osc1Vol = 0.80f, osc1Tune = 0.50f, osc1Wave = 0,
         osc2Vol = 0.65f, osc2Tune = 0.50f, osc2Wave = 1,
         osc3Vol = 0.55f, osc3Tune = 0.25f, osc3Wave = 2,
@@ -106,50 +106,86 @@ fun getFactoryPresets(): List<SynthPreset> = listOf(
     SynthPreset(
         name = "2. Classic Minimoog Lead",
         osc1Vol = 0.85f, osc1Tune = 0.50f, osc1Wave = 0,
-        osc2Vol = 0.70f, osc2Tune = 0.50f, osc2Wave = 0,
-        osc3Vol = 0.55f, osc3Tune = 0.25f, osc3Wave = 0,
-        cutoffNorm = 0.68f, resNorm = 0.22f, envAmtNorm = 0.50f,
-        fAttack = 0.015f, fDecay = 0.30f, fSustain = 0.40f, fRelease = 0.25f,
-        lfoRateNorm = 0.28f, lfoDepthNorm = 0.02f,
-        delayTimeNorm = 0.35f, delayFbNorm = 0.38f, delayMixNorm = 0.18f,
-        aAttack = 0.008f, aDecay = 0.30f, aSustain = 0.85f, aRelease = 0.22f,
-        masterNorm = 0.85f
-    ),
-    SynthPreset(
-        name = "3. Taurus Pure Sub Bass",
-        osc1Vol = 0.85f, osc1Tune = 0.25f, osc1Wave = 0,
-        osc2Vol = 0.75f, osc2Tune = 0.25f, osc2Wave = 1,
-        osc3Vol = 0.65f, osc3Tune = 0.50f, osc3Wave = 2,
-        cutoffNorm = 0.42f, resNorm = 0.20f, envAmtNorm = 0.52f,
-        fAttack = 0.005f, fDecay = 0.20f, fSustain = 0.20f, fRelease = 0.15f,
-        lfoRateNorm = 0.15f, lfoDepthNorm = 0.0f,
-        delayTimeNorm = 0.25f, delayFbNorm = 0.15f, delayMixNorm = 0.0f,
-        aAttack = 0.005f, aDecay = 0.25f, aSustain = 0.85f, aRelease = 0.15f,
+        osc2Vol = 0.75f, osc2Tune = 0.50f, osc2Wave = 1,
+        osc3Vol = 0.60f, osc3Tune = 0.25f, osc3Wave = 0,
+        cutoffNorm = 0.65f, resNorm = 0.30f, envAmtNorm = 0.55f,
+        fAttack = 0.01f, fDecay = 0.25f, fSustain = 0.35f, fRelease = 0.15f,
+        lfoRateNorm = 0.35f, lfoDepthNorm = 0.04f,
+        delayTimeNorm = 0.40f, delayFbNorm = 0.35f, delayMixNorm = 0.20f,
+        aAttack = 0.005f, aDecay = 0.20f, aSustain = 0.80f, aRelease = 0.15f,
         masterNorm = 0.88f
     ),
     SynthPreset(
-        name = "4. Lucky Man Solo",
-        osc1Vol = 0.85f, osc1Tune = 0.50f, osc1Wave = 1,
-        osc2Vol = 0.70f, osc2Tune = 0.75f, osc2Wave = 1,
-        osc3Vol = 0.60f, osc3Tune = 0.25f, osc3Wave = 2,
-        cutoffNorm = 0.72f, resNorm = 0.20f, envAmtNorm = 0.40f,
-        fAttack = 0.025f, fDecay = 0.35f, fSustain = 0.55f, fRelease = 0.35f,
-        lfoRateNorm = 0.30f, lfoDepthNorm = 0.04f,
-        delayTimeNorm = 0.40f, delayFbNorm = 0.40f, delayMixNorm = 0.22f,
-        aAttack = 0.015f, aDecay = 0.30f, aSustain = 0.90f, aRelease = 0.35f,
-        masterNorm = 0.85f
+        name = "3. Taurus Sub Bass",
+        osc1Vol = 0.90f, osc1Tune = 0.25f, osc1Wave = 0,
+        osc2Vol = 0.80f, osc2Tune = 0.25f, osc2Wave = 2,
+        osc3Vol = 0.70f, osc3Tune = 0.50f, osc3Wave = 2,
+        cutoffNorm = 0.25f, resNorm = 0.10f, envAmtNorm = 0.50f,
+        fAttack = 0.005f, fDecay = 0.18f, fSustain = 0.15f, fRelease = 0.10f,
+        lfoRateNorm = 0.10f, lfoDepthNorm = 0.0f,
+        delayTimeNorm = 0.20f, delayFbNorm = 0.10f, delayMixNorm = 0.0f,
+        aAttack = 0.005f, aDecay = 0.25f, aSustain = 0.85f, aRelease = 0.15f,
+        masterNorm = 0.90f
+    ),
+    SynthPreset(
+        name = "4. 80s Synthwave Pad",
+        osc1Vol = 0.80f, osc1Tune = 0.50f, osc1Wave = 0,
+        osc2Vol = 0.75f, osc2Tune = 0.52f, osc2Wave = 0,
+        osc3Vol = 0.65f, osc3Tune = 0.48f, osc3Wave = 1,
+        cutoffNorm = 0.45f, resNorm = 0.10f, envAmtNorm = 0.35f,
+        fAttack = 0.15f, fDecay = 0.30f, fSustain = 0.70f, fRelease = 0.35f,
+        lfoRateNorm = 0.40f, lfoDepthNorm = 0.06f,
+        delayTimeNorm = 0.50f, delayFbNorm = 0.50f, delayMixNorm = 0.35f,
+        aAttack = 0.18f, aDecay = 0.35f, aSustain = 0.90f, aRelease = 0.40f,
+        masterNorm = 0.82f
     ),
     SynthPreset(
         name = "5. Blade Runner Brass",
-        osc1Vol = 0.80f, osc1Tune = 0.50f, osc1Wave = 0,
-        osc2Vol = 0.75f, osc2Tune = 0.50f, osc2Wave = 0,
-        osc3Vol = 0.50f, osc3Tune = 0.25f, osc3Wave = 1,
-        cutoffNorm = 0.48f, resNorm = 0.18f, envAmtNorm = 0.65f,
-        fAttack = 0.16f, fDecay = 0.45f, fSustain = 0.60f, fRelease = 0.45f,
-        lfoRateNorm = 0.22f, lfoDepthNorm = 0.03f,
-        delayTimeNorm = 0.45f, delayFbNorm = 0.42f, delayMixNorm = 0.25f,
-        aAttack = 0.10f, aDecay = 0.40f, aSustain = 0.85f, aRelease = 0.48f,
+        osc1Vol = 0.85f, osc1Tune = 0.50f, osc1Wave = 0,
+        osc2Vol = 0.85f, osc2Tune = 0.51f, osc2Wave = 0,
+        osc3Vol = 0.70f, osc3Tune = 0.49f, osc3Wave = 0,
+        cutoffNorm = 0.30f, resNorm = 0.18f, envAmtNorm = 0.65f,
+        fAttack = 0.25f, fDecay = 0.35f, fSustain = 0.55f, fRelease = 0.35f,
+        lfoRateNorm = 0.25f, lfoDepthNorm = 0.05f,
+        delayTimeNorm = 0.45f, delayFbNorm = 0.45f, delayMixNorm = 0.30f,
+        aAttack = 0.20f, aDecay = 0.30f, aSustain = 0.80f, aRelease = 0.40f,
         masterNorm = 0.85f
+    ),
+    SynthPreset(
+        name = "6. Stranger Things Arp",
+        osc1Vol = 0.85f, osc1Tune = 0.50f, osc1Wave = 1,
+        osc2Vol = 0.70f, osc2Tune = 0.50f, osc2Wave = 0,
+        osc3Vol = 0.60f, osc3Tune = 0.25f, osc3Wave = 1,
+        cutoffNorm = 0.35f, resNorm = 0.40f, envAmtNorm = 0.70f,
+        fAttack = 0.005f, fDecay = 0.15f, fSustain = 0.0f, fRelease = 0.12f,
+        lfoRateNorm = 0.30f, lfoDepthNorm = 0.0f,
+        delayTimeNorm = 0.35f, delayFbNorm = 0.30f, delayMixNorm = 0.25f,
+        aAttack = 0.005f, aDecay = 0.18f, aSustain = 0.0f, aRelease = 0.10f,
+        masterNorm = 0.85f
+    ),
+    SynthPreset(
+        name = "7. Lucky Man Solo",
+        osc1Vol = 0.85f, osc1Tune = 0.50f, osc1Wave = 1,
+        osc2Vol = 0.80f, osc2Tune = 0.50f, osc2Wave = 1,
+        osc3Vol = 0.60f, osc3Tune = 0.25f, osc3Wave = 2,
+        cutoffNorm = 0.75f, resNorm = 0.25f, envAmtNorm = 0.40f,
+        fAttack = 0.02f, fDecay = 0.35f, fSustain = 0.60f, fRelease = 0.30f,
+        lfoRateNorm = 0.35f, lfoDepthNorm = 0.05f,
+        delayTimeNorm = 0.40f, delayFbNorm = 0.40f, delayMixNorm = 0.22f,
+        aAttack = 0.015f, aDecay = 0.30f, aSustain = 0.90f, aRelease = 0.30f,
+        masterNorm = 0.85f
+    ),
+    SynthPreset(
+        name = "8. FM Style Bell",
+        osc1Vol = 0.85f, osc1Tune = 0.75f, osc1Wave = 2,
+        osc2Vol = 0.70f, osc2Tune = 0.75f, osc2Wave = 2,
+        osc3Vol = 0.55f, osc3Tune = 0.50f, osc3Wave = 1,
+        cutoffNorm = 0.60f, resNorm = 0.55f, envAmtNorm = 0.50f,
+        fAttack = 0.001f, fDecay = 0.20f, fSustain = 0.0f, fRelease = 0.25f,
+        lfoRateNorm = 0.45f, lfoDepthNorm = 0.0f,
+        delayTimeNorm = 0.38f, delayFbNorm = 0.45f, delayMixNorm = 0.30f,
+        aAttack = 0.001f, aDecay = 0.22f, aSustain = 0.0f, aRelease = 0.25f,
+        masterNorm = 0.80f
     )
 )
 
@@ -592,8 +628,10 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
                             text = "⚙️ MOTOR DE ÁUDIO & DSP (PURE ANALOG)",
                             color = Color(0xFFF59E0B),
                             fontSize = 14.sp,
-                            fontWeight = FontWeight.ExtraBold
+                            fontWeight = FontWeight.ExtraBold,
+                            modifier = Modifier.weight(1f)
                         )
+                        Spacer(modifier = Modifier.width(12.dp))
                         Box(
                             modifier = Modifier
                                 .background(Color(0xFF1E293B), RoundedCornerShape(6.dp))
@@ -1044,3 +1082,4 @@ fun ModuleBox(title: String, content: @Composable ColumnScope.() -> Unit) {
         content()
     }
 }
+
