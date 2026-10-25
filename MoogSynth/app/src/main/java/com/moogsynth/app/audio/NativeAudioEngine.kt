@@ -30,6 +30,22 @@ class NativeAudioEngine {
 
     external fun getWaveform(outArray: FloatArray)
 
+
+    external fun setSynthType(type: Int) // 0 = Moog, 1 = Juno
+    
+    // Controles Roland Juno-6
+    external fun setJunoRange(range: Int)
+    external fun setJunoPulseVol(vol: Float)
+    external fun setJunoSawVol(vol: Float)
+    external fun setJunoSubVol(vol: Float)
+    external fun setJunoNoiseVol(vol: Float)
+    external fun setJunoPwm(pwm: Float)
+    external fun setJunoHpf(cutoffHz: Float)
+    external fun setJunoVcfCutoff(cutoffHz: Float)
+    external fun setJunoVcfRes(res: Float)
+    external fun setJunoEnvAmt(envAmount: Float)
+    external fun setJunoChorus(mode: Int) // 0=Off, 1=I, 2=II, 3=I+II
+
     // Controles do Motor Analógico Orgânico & Performance Oboe
     external fun setOversampling(factor: Int)
     external fun setAnalogDrift(drift: Float)
@@ -55,3 +71,4 @@ class NativeAudioEngine {
     external fun setTapeMotorFriction(friction: Float)
     external fun setTapeMagneticBias(bias: Float)
 }
+
