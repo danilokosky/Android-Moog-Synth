@@ -1052,9 +1052,21 @@ public:
             return;
         }
 
+
+
+
+
+
+
+   
+
+
+
         float totalVol = oscVols[0] + oscVols[1] + oscVols[2];
         float mixScale = (totalVol > 0.001f) ? (1.0f / sqrtf(std::max(1.0f, totalVol))) : 0.0f;
         float totalMixGain = mixScale * 0.65f * (1.0f - sagEffect * 0.12f);
+
+        float voiceCutoff = std::clamp(baseCutoff * exp2f(totalOctaves), 20.0f, 20000.0f);
 
         vcf.prepareFrame(
             voiceCutoff,
@@ -1065,6 +1077,14 @@ public:
             phys.transistorMismatch
         );
 
+
+
+
+
+
+
+
+        
         float filtered = 0.0f;
         float capLeak = phys.capacitorLeakage;
         float compTh = phys.comparatorThreshold;
