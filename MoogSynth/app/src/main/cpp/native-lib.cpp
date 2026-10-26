@@ -170,6 +170,7 @@ public:
     double sampleRate = 48000.0;
     double frequency = 440.0;
     double phase = 0.0;
+    double subPhase = 0.0;
     int waveType = 0;
 
     static inline double polyBlep2(double t, double dt) {
@@ -314,6 +315,7 @@ public:
 class JunoDCO {
 public:
     double phase = 0.0;
+    double subPhase = 0.0;
     double frequency = 440.0;
     double sampleRate = 48000.0;
 
@@ -353,7 +355,8 @@ public:
 
         // SUB-OSCILLATOR Phase-Locked Flip-Flop Matemático
         if (subVol > 0.0f) {
-            double subPhase = phase * 0.5;
+            subPhase += dt * 0.5;
+            if (subPhase >= 1.0) subPhase -= 1.0;
             double sub = (subPhase < 0.5) ? 1.0 : -1.0;
             sub += Oscillator::polyBlep4(subPhase, dt * 0.5);
             double subPhase2 = subPhase + 0.5;
@@ -1022,7 +1025,7 @@ public:
 
         if (juno.synthType == 1) {
             float jCutoffHz = std::max(juno.vcfCutoff * exp2f(envOctaves * juno.envAmt + lfoModOctaves + keyTrackOctaves), 40.0f);
-            float totalJunoDetuneSt = (lfoModOctaves * 0.4f) + (oscDriftSt[0] * driftAmount * 0.35f) - (sagEffect * 0.12f);
+            float totalJunoDetuneSt = (oscDriftSt[0] * driftAmount * 0.35f) - (sagEffect * 0.12f); // LFO Desacoplado do Pitch
             float baseJunoFreq = 440.0f * exp2f((static_cast<float>(currentNote) + totalJunoDetuneSt - 69.0f) / 12.0f);
             
             junoDco.setFrequency(baseJunoFreq, 48000.0 * os);
@@ -1052,21 +1055,11 @@ public:
             return;
         }
 
-
-
-
-
-
-
-   
-
-
-
         float totalVol = oscVols[0] + oscVols[1] + oscVols[2];
         float mixScale = (totalVol > 0.001f) ? (1.0f / sqrtf(std::max(1.0f, totalVol))) : 0.0f;
         float totalMixGain = mixScale * 0.65f * (1.0f - sagEffect * 0.12f);
 
-        float voiceCutoff = std::clamp(baseCutoff * exp2f(totalOctaves), 20.0f, 20000.0f);
+        float voiceCutoff = std::clamp(baseCutoff * exp2f(totalOctaves), 20.0f, 20000.0f); // Adicionado
 
         vcf.prepareFrame(
             voiceCutoff,
@@ -1077,14 +1070,6 @@ public:
             phys.transistorMismatch
         );
 
-
-
-
-
-
-
-
-        
         float filtered = 0.0f;
         float capLeak = phys.capacitorLeakage;
         float compTh = phys.comparatorThreshold;
