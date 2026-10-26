@@ -364,6 +364,9 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
         }
 
         fAttack = p.fAttack; fDecay = p.fDecay; fSustain = p.fSustain; fRelease = p.fRelease
+        if (p.synthType == 1) {
+            fAttack = p.aAttack; fDecay = p.aDecay; fSustain = p.aSustain; fRelease = p.aRelease
+        }
         lfoRateNorm = p.lfoRateNorm; lfoDepthNorm = p.lfoDepthNorm
         delayTimeNorm = p.delayTimeNorm; delayFbNorm = p.delayFbNorm; delayMixNorm = p.delayMixNorm
         aAttack = p.aAttack; aDecay = p.aDecay; aSustain = p.aSustain; aRelease = p.aRelease
@@ -564,10 +567,26 @@ fun SynthScreen(audioEngine: NativeAudioEngine, incomingMidiCC: MidiCCEvent? = n
             "DELAY_TIME" -> { delayTimeNorm = v; audioEngine.setDelayParams(0.05f + v * 0.95f, delayFbNorm, delayMixNorm) }
             "DELAY_FB" -> { delayFbNorm = v; audioEngine.setDelayParams(0.05f + delayTimeNorm * 0.95f, v, delayMixNorm) }
             "DELAY_MIX" -> { delayMixNorm = v; audioEngine.setDelayParams(0.05f + delayTimeNorm * 0.95f, delayFbNorm, v) }
-            "A_ATK" -> { aAttack = v; audioEngine.setAmpADSR(aAttack * 2f, aDecay * 2f, aSustain, aRelease * 3f) }
-            "A_DEC" -> { aDecay = v; audioEngine.setAmpADSR(aAttack * 2f, aDecay * 2f, aSustain, aRelease * 3f) }
-            "A_SUS" -> { aSustain = v; audioEngine.setAmpADSR(aAttack * 2f, aDecay * 2f, aSustain, aRelease * 3f) }
-            "A_REL" -> { aRelease = v; audioEngine.setAmpADSR(aAttack * 2f, aDecay * 2f, aSustain, aRelease * 3f) }
+            "A_ATK" -> { 
+                aAttack = v; audioEngine.setAmpADSR(aAttack * 2f, aDecay * 2f, aSustain, aRelease * 3f)
+                val activeSynthType = if (currentLayer == 0) synthTypeA else synthTypeB
+                if (activeSynthType == 1) { fAttack = v; audioEngine.setFilterADSR(aAttack * 2f, aDecay * 2f, aSustain, aRelease * 3f) }
+            }
+            "A_DEC" -> { 
+                aDecay = v; audioEngine.setAmpADSR(aAttack * 2f, aDecay * 2f, aSustain, aRelease * 3f)
+                val activeSynthType = if (currentLayer == 0) synthTypeA else synthTypeB
+                if (activeSynthType == 1) { fDecay = v; audioEngine.setFilterADSR(aAttack * 2f, aDecay * 2f, aSustain, aRelease * 3f) }
+            }
+            "A_SUS" -> { 
+                aSustain = v; audioEngine.setAmpADSR(aAttack * 2f, aDecay * 2f, aSustain, aRelease * 3f)
+                val activeSynthType = if (currentLayer == 0) synthTypeA else synthTypeB
+                if (activeSynthType == 1) { fSustain = v; audioEngine.setFilterADSR(aAttack * 2f, aDecay * 2f, aSustain, aRelease * 3f) }
+            }
+            "A_REL" -> { 
+                aRelease = v; audioEngine.setAmpADSR(aAttack * 2f, aDecay * 2f, aSustain, aRelease * 3f)
+                val activeSynthType = if (currentLayer == 0) synthTypeA else synthTypeB
+                if (activeSynthType == 1) { fRelease = v; audioEngine.setFilterADSR(aAttack * 2f, aDecay * 2f, aSustain, aRelease * 3f) }
+            }
             "MASTER" -> { masterNorm = v; audioEngine.setMasterVolume(v) }
             "JUNO_PULSE" -> { junoPulseVol = v; audioEngine.setJunoPulseVol(v) }
             "JUNO_SAW" -> { junoSawVol = v; audioEngine.setJunoSawVol(v) }
